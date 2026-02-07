@@ -1350,13 +1350,8 @@ def render_library():
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ========== 视图切换 ==========
-    st.markdown('<div class="section-block">', unsafe_allow_html=True)
-    col_view_label, col_view_options = st.columns([1, 2])
-    with col_view_label:
-        st.markdown('<div style="font-size: 1.1rem; font-weight: 600;">🎨 视图</div>', unsafe_allow_html=True)
-
-    with col_view_options:
+    # ========== 视图切换（折叠） ==========
+    with st.expander("🎨 视图切换（点击展开）", expanded=False):
         if 'view_mode' not in st.session_state:
             st.session_state.view_mode = "grid_2"  # 默认2列网格
 
