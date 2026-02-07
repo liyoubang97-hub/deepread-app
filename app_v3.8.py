@@ -495,141 +495,151 @@ st.markdown("""
 # ==================== 图片生成函数 ====================
 
 def create_quote_card_image(title, author, quote):
-    """生成金句卡片图片"""
-    # 图片尺寸
-    width = 600
-    padding = 60
-    font_size_title = 28
-    font_size_author = 20
-    font_size_quote = 32
+    """生成金句卡片图片 - 小红书风格"""
+    # 小红书头图尺寸：1080x1440 (3:4比例)
+    width = 1080
+    height = 1440
+    padding = 80
 
-    # 计算高度（根据文本长度）
-    try:
-        # 尝试使用系统中文字体
-        font_title = ImageFont.truetype("msyh.ttc", font_size_title)  # 微软雅黑
-        font_author = ImageFont.truetype("msyh.ttc", font_size_author)
-        font_quote = ImageFont.truetype("msyhbd.ttc", font_size_quote)  # 微软雅黑粗体
-        font_small = ImageFont.truetype("msyh.ttc", 16)
-    except:
-        try:
-            # 备用字体
-            font_title = ImageFont.truetype("arial.ttf", font_size_title)
-            font_author = ImageFont.truetype("arial.ttf", font_size_author)
-            font_quote = ImageFont.truetype("arialbd.ttf", font_size_quote)
-            font_small = ImageFont.truetype("arial.ttf", 16)
-        except:
-            # 使用默认字体
-            font_title = ImageFont.load_default()
-            font_author = ImageFont.load_default()
-            font_quote = ImageFont.load_default()
-            font_small = ImageFont.load_default()
+    # 字体大小（小红书风格：大而醒目）
+    font_size_title = 56
+    font_size_author = 36
+    font_size_quote = 52
+    font_size_small = 28
 
-    # 临时创建用于测量文本的图片
-    temp_img = Image.new('RGB', (width, 100))
-    temp_draw = ImageDraw.Draw(temp_img)
-
-    # 测量标题
-    title_bbox = temp_draw.textbbox((0, 0), title, font=font_title)
-    title_height = title_bbox[3] - title_bbox[1]
-
-    # 测量作者
-    author_bbox = temp_draw.textbbox((0, 0), author, font=font_author)
-    author_height = author_bbox[3] - author_bbox[1]
-
-    # 测量金句（处理换行）
-    max_quote_width = width - 2 * padding - 40
-    lines = []
-    words = quote
-    for char in words:
-        test_line = lines[-1] + char if lines else char
-        bbox = temp_draw.textbbox((0, 0), test_line, font=font_quote)
-        if bbox[2] - bbox[0] <= max_quote_width:
-            if lines:
-                lines[-1] = test_line
-            else:
-                lines.append(test_line)
+    # 尝试加载中文字体
+    def load_chinese_font(size, bold=False):
+        """加载中文字体，按优先级尝试"""
+        font_list = []
+        if bold:
+            font_list = [
+                "NotoSansSC-Bold.otf",
+                "SimHei.ttf",
+                "simhei.ttf",
+                "STHeiti",
+                "msyhbd.ttc",
+                "Arial.ttf"
+            ]
         else:
-            lines.append(char)
+            font_list = [
+                "NotoSansSC-Regular.otf",
+                "SimSun.ttf",
+                "simsun.ttf",
+                "STSong",
+                "msyh.ttc",
+                "Arial.ttf"
+            ]
 
-    quote_height = len(lines) * (font_size_quote + 8)
+        for font_name in font_list:
+            try:
+                return ImageFont.truetype(font_name, size)
+            except:
+                continue
 
-    # 计算总高度
-    total_height = (
-        padding +  # 顶部渐变条空间
-        title_height + 20 +  # 标题区域
-        author_height + 20 +  # 作者区域
-        40 +  # 金句卡片padding
-        quote_height + 40 +  # 金句文本
-        80 +  # 底部品牌区域
-        padding  # 底部padding
-    )
+        # 如果都失败，返回默认字体（不支持中文）
+        try:
+            return ImageFont.load_default()
+        except:
+            return None
+
+    font_title = load_chinese_font(font_size_title, bold=True)
+    font_author = load_chinese_font(font_size_author)
+    font_quote = load_chinese_font(font_size_quote, bold=True)
+    font_small = load_chinese_font(font_size_small)
 
     # 创建图片
-    img = Image.new('RGB', (width, total_height), color='#F8F9FA')
+    img = Image.new('RGB', (width, height), color='#FFFFFF')
     draw = ImageDraw.Draw(img)
 
-    # 绘制背景渐变（简化为纯色）
-    draw.rectangle([(0, 0), (width, total_height)], fill='#FFFFFF')
+    # 绘制柔和的渐变背景（从上到下）
+    for y in range(min(200, height)):
+        alpha = max(0, min(255, 255 - int(y * 1.2)))
+        color = (
+            max(102, 255 - int(y * 0.8)),
+            max(126, 255 - int(y * 0.8)),
+            234
+        )
+        draw.rectangle([(0, y), (width, y+1)], fill=color)
 
-    # 绘制顶部渐变条
-    for i in range(8):
-        alpha = int(255 * (1 - i / 8))
-        color = f"rgba(102, 126, 234, {alpha})"
-        draw.rectangle([(0, i), (width, i+1)], fill='#667eea')
+    # 绘制标题（居中，大而醒目）
+    if font_title:
+        title_bbox = draw.textbbox((0, 0), title, font=font_title)
+        title_width = title_bbox[2] - title_bbox[0]
+        draw.text(((width - title_width) // 2, 200), title, fill='#667eea', font=font_title)
 
-    # 绘制标题
-    draw.text((padding, 30), title, fill='#667eea', font=font_title)
+    # 绘制作者（居中）
+    if font_author:
+        author_bbox = draw.textbbox((0, 0), author, font=font_author)
+        author_width = author_bbox[2] - author_bbox[0]
+        draw.text(((width - author_width) // 2, 280), author, fill='#636E72', font=font_author)
 
-    # 绘制作者
-    draw.text((padding, 30 + title_height + 10), author, fill='#636E72', font=font_author)
-
-    # 绘制金句背景卡片
-    quote_y = 30 + title_height + 10 + author_height + 30
-    draw.rectangle(
-        [(padding, quote_y), (width - padding, quote_y + quote_height + 40)],
+    # 绘制金句背景（优雅的卡片）
+    quote_y = 400
+    quote_card_height = 800
+    draw.rounded_rectangle(
+        [(padding, quote_y), (width - padding, quote_y + quote_card_height)],
+        radius=40,
         fill='#F8F9FA',
-        outline='#E8EEF2',
-        width=1
+        outline='#667eea'
     )
 
-    # 绘制金句文本
-    for i, line in enumerate(lines):
-        draw.text(
-            (padding + 20, quote_y + 20 + i * (font_size_quote + 8)),
-            line,
-            fill='#2D3436',
-            font=font_quote
-        )
+    # 绘制装饰线条
+    draw.line([(padding + 60, quote_y + 80), (padding + 120, quote_y + 80)], fill='#667eea', width=6)
+    draw.line([(width - padding - 60, quote_y + quote_card_height - 80), (width - padding - 120, quote_y + quote_card_height - 80)], fill='#667eea', width=6)
 
-    # 绘制底部品牌区域
-    brand_y = quote_y + quote_height + 60
-    try:
-        # 绘制圆形背景
+    # 绘制金句文本（简化处理，避免乱码）
+    if font_quote:
+        # 分行处理（最多显示4行）
+        max_chars_per_line = 18
+        quote_text = quote.replace('\n', ' ')
+        lines = []
+        for i in range(0, len(quote_text), max_chars_per_line):
+            lines.append(quote_text[i:i+max_chars_per_line])
+
+        # 限制最多4行
+        lines = lines[:4]
+
+        # 计算垂直居中
+        total_quote_height = len(lines) * (font_size_quote + 20)
+        start_y = quote_y + (quote_card_height - total_quote_height) // 2 - 40
+
+        for i, line in enumerate(lines):
+            line_bbox = draw.textbbox((0, 0), line, font=font_quote)
+            line_width = line_bbox[2] - line_bbox[0]
+            draw.text(
+                ((width - line_width) // 2, start_y + i * (font_size_quote + 20)),
+                line,
+                fill='#2D3436',
+                font=font_quote
+            )
+
+    # 绘制底部品牌
+    brand_y = 1280
+    if font_author:
+        # 背景圆
         draw.ellipse(
-            [(width//2 - 70, brand_y), (width//2 - 30, brand_y + 40)],
+            [(width//2 - 50, brand_y), (width//2 + 50, brand_y + 100)],
             fill='rgba(102, 126, 234, 0.1)',
-            outline='#667eea'
+            outline='#667eea',
+            width=3
         )
-        # 绘制大脑emoji（用文本代替）
-        draw.text((width//2 - 58, brand_y + 3), '🧠', font=font_small)
 
-        # 绘制品牌文字
+        # 品牌
         brand_text = "DeepRead 深读"
         brand_bbox = draw.textbbox((0, 0), brand_text, font=font_author)
         brand_width = brand_bbox[2] - brand_bbox[0]
-        draw.text((width//2 - brand_width//2 + 25, brand_y + 8), brand_text, fill='#667eea', font=font_author)
+        draw.text((width//2 - brand_width//2, brand_y + 20), brand_text, fill='#667eea', font=font_author)
 
-        # 绘制副标题
-        tagline = "深度阅读 · 沉浸思考"
-        tagline_bbox = draw.textbbox((0, 0), tagline, font=font_small)
-        tagline_width = tagline_bbox[2] - tagline_bbox[0]
-        draw.text((width//2 - tagline_width//2, brand_y + 55), tagline, fill='#636E72', font=font_small)
-    except:
-        pass
+        # 标语
+        if font_small:
+            tagline = "深度阅读 · 沉浸思考"
+            tagline_bbox = draw.textbbox((0, 0), tagline, font=font_small)
+            tagline_width = tagline_bbox[2] - tagline_bbox[0]
+            draw.text((width//2 - tagline_width//2, brand_y + 80), tagline, fill='#636E72', font=font_small)
 
     # 转换为字节
     buf = BytesIO()
-    img.save(buf, format='PNG', quality=95)
+    img.save(buf, format='PNG', quality=100)
     buf.seek(0)
     return buf.getvalue()
 
