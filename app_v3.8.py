@@ -497,6 +497,52 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# ==================== 字体下载函数 ====================
+
+def download_chinese_font():
+    """下载中文字体（如果不存在）"""
+    font_dir = Path(__file__).parent / 'fonts'
+    font_dir.mkdir(exist_ok=True)
+
+    # 使用轻量级的文泉驿字体（约5MB）
+    font_file = font_dir / 'wqy-zenhei.ttc'
+
+    if font_file.exists():
+        return str(font_file)
+
+    # 尝试下载字体
+    try:
+        import urllib.request
+        import platform
+
+        # 根据平台选择合适的字体
+        if platform.system() == 'Windows':
+            # Windows 直接使用系统字体
+            if Path('C:/Windows/Fonts/msyh.ttc').exists():
+                return 'C:/Windows/Fonts/msyh.ttc'
+        elif platform.system() == 'Darwin':  # macOS
+            if Path('/System/Library/Fonts/PingFang.ttc').exists():
+                return '/System/Library/Fonts/PingFang.ttc'
+
+        # Linux 或其他系统，尝试下载
+        urls = [
+            "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/SimplifiedChinese/NotoSansSC-Regular.otf",
+            "https://raw.githubusercontent.com/googlefonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansSC-Regular.otf",
+        ]
+
+        for url in urls:
+            try:
+                urllib.request.urlretrieve(url, font_dir / 'NotoSansSC-Regular.otf')
+                return str(font_dir / 'NotoSansSC-Regular.otf')
+            except:
+                continue
+
+    except Exception as e:
+        pass
+
+    return None
+
+
 # ==================== 图片生成函数 ====================
 
 def create_quote_card_image(title, author, quote):
@@ -513,57 +559,21 @@ def create_quote_card_image(title, author, quote):
     ax.set_ylim(0, 144)
     ax.axis('off')
 
-    # 配置中文字体
-    def get_chinese_font():
-        """获取中文字体路径"""
-        import platform
-        system = platform.system()
-
-        font_paths = []
-
-        if system == 'Linux':
-            # Linux 常见中文字体路径
-            font_paths = [
-                '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
-                '/usr/share/fonts/truetype/arphic/uming.ttc',
-                '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
-                '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-                '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
-            ]
-        elif system == 'Darwin':  # macOS
-            font_paths = [
-                '/System/Library/Fonts/PingFang.ttc',
-                '/System/Library/Fonts/STHeiti Light.ttc',
-                '/Library/Fonts/Arial Unicode.ttf',
-            ]
-        elif system == 'Windows':
-            font_paths = [
-                'C:/Windows/Fonts/msyh.ttc',
-                'C:/Windows/Fonts/msyhbd.ttc',
-                'C:/Windows/Fonts/simhei.ttf',
-                'C:/Windows/Fonts/simsun.ttc',
-            ]
-
-        # 尝试找到可用的中文字体
-        for font_path in font_paths:
-            try:
-                # 检查文件是否存在
-                import os
-                if os.path.exists(font_path):
-                    return font_path
-            except:
-                continue
-
-        return None
+    # 下载或获取中文字体
+    chinese_font_path = download_chinese_font()
 
     # 设置字体
-    chinese_font_path = get_chinese_font()
     if chinese_font_path:
-        # 注册并使用中文字体
-        font_prop = font_manager.FontProperties(fname=chinese_font_path)
-        font_prop_bold = font_manager.FontProperties(fname=chinese_font_path, weight='bold')
+        try:
+            font_prop = font_manager.FontProperties(fname=chinese_font_path)
+            font_prop_bold = font_manager.FontProperties(fname=chinese_font_path, weight='bold')
+            chinese_available = True
+        except:
+            chinese_available = False
+            font_prop = font_manager.FontProperties(family='sans-serif')
+            font_prop_bold = font_manager.FontProperties(family='sans-serif', weight='bold')
     else:
-        # 使用默认字体（可能不支持中文）
+        chinese_available = False
         font_prop = font_manager.FontProperties(family='sans-serif')
         font_prop_bold = font_manager.FontProperties(family='sans-serif', weight='bold')
 
@@ -581,18 +591,18 @@ def create_quote_card_image(title, author, quote):
         ax.add_patch(patches.Rectangle((0, y), 108, 1, facecolor=(color_val, color_val, min(1, color_val + 0.08))))
 
     # 绘制标题
-    try:
+    if chinese_available:
         ax.text(54, 17.5, title, fontsize=56, color='#667eea',
                 ha='center', va='center', fontproperties=font_prop_bold, weight='bold')
-    except:
+    else:
         ax.text(54, 17.5, "QUOTE CARD", fontsize=56, color='#667eea',
                 ha='center', va='center', weight='bold')
 
     # 绘制作者
-    try:
+    if chinese_available:
         ax.text(54, 13.5, author, fontsize=36, color='#636E72',
                 ha='center', va='center', fontproperties=font_prop)
-    except:
+    else:
         ax.text(54, 13.5, "By Author", fontsize=36, color='#636E72',
                 ha='center', va='center')
 
@@ -630,22 +640,20 @@ def create_quote_card_image(title, author, quote):
     total_height = len(lines) * line_height
     start_y = quote_y + (quote_height - total_height) / 2 + 3
 
-    for i, line in enumerate(lines):
-        try:
+    if chinese_available:
+        for i, line in enumerate(lines):
             ax.text(54, start_y + i * line_height, line,
                    fontsize=52, color='#2D3436',
                    ha='center', va='center',
                    fontproperties=font_prop_bold, weight='bold')
-        except:
-            # 如果中文渲染失败，显示占位文本
-            if i == 0:
-                ax.text(54, start_y, "Deep Reading",
-                       fontsize=52, color='#2D3436',
-                       ha='center', va='center', weight='bold')
-            if i == 1:
-                ax.text(54, start_y + line_height, "Critical Thinking",
-                       fontsize=42, color='#636E72',
-                       ha='center', va='center')
+    else:
+        # 如果中文不可用，显示占位文本
+        ax.text(54, start_y + 2, "Deep Reading",
+               fontsize=52, color='#2D3436',
+               ha='center', va='center', weight='bold')
+        ax.text(54, start_y + 10, "Critical Thinking",
+               fontsize=42, color='#636E72',
+               ha='center', va='center')
 
     # 绘制底部品牌区域
     brand_y = 128
@@ -657,18 +665,16 @@ def create_quote_card_image(title, author, quote):
     ax.add_patch(ellipse)
 
     # 品牌文本
-    try:
+    if chinese_available:
         ax.text(54, brand_y + 3, "DeepRead 深读",
                fontsize=40, color='#667eea',
                ha='center', va='center',
                fontproperties=font_prop, weight='bold')
-
-        # 标语
         ax.text(54, brand_y + 8.5, "深度阅读 · 沉浸思考",
                fontsize=30, color='#636E72',
                ha='center', va='center',
                fontproperties=font_prop)
-    except:
+    else:
         ax.text(54, brand_y + 3, "DeepRead",
                fontsize=40, color='#667eea',
                ha='center', va='center', weight='bold')
@@ -688,52 +694,22 @@ def create_quote_card_image(title, author, quote):
 
 def create_reading_poster_image(title, author, emoji, tags, quote, stats):
     """生成阅读海报图片 - 使用matplotlib（更好的中文支持）"""
-    # 配置中文字体
-    def get_chinese_font():
-        """获取中文字体路径"""
-        import platform
-        system = platform.system()
+    # 下载或获取中文字体
+    chinese_font_path = download_chinese_font()
 
-        font_paths = []
-
-        if system == 'Linux':
-            font_paths = [
-                '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
-                '/usr/share/fonts/truetype/arphic/uming.ttc',
-                '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
-                '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-                '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
-            ]
-        elif system == 'Darwin':  # macOS
-            font_paths = [
-                '/System/Library/Fonts/PingFang.ttc',
-                '/System/Library/Fonts/STHeiti Light.ttc',
-                '/Library/Fonts/Arial Unicode.ttf',
-            ]
-        elif system == 'Windows':
-            font_paths = [
-                'C:/Windows/Fonts/msyh.ttc',
-                'C:/Windows/Fonts/msyhbd.ttc',
-                'C:/Windows/Fonts/simhei.ttf',
-                'C:/Windows/Fonts/simsun.ttc',
-            ]
-
-        for font_path in font_paths:
-            try:
-                import os
-                if os.path.exists(font_path):
-                    return font_path
-            except:
-                continue
-
-        return None
-
-    chinese_font_path = get_chinese_font()
     if chinese_font_path:
-        font_prop = font_manager.FontProperties(fname=chinese_font_path)
-        font_prop_bold = font_manager.FontProperties(fname=chinese_font_path, weight='bold')
-        font_prop_small = font_manager.FontProperties(fname=chinese_font_path, size=10)
+        try:
+            font_prop = font_manager.FontProperties(fname=chinese_font_path)
+            font_prop_bold = font_manager.FontProperties(fname=chinese_font_path, weight='bold')
+            font_prop_small = font_manager.FontProperties(fname=chinese_font_path, size=10)
+            chinese_available = True
+        except:
+            chinese_available = False
+            font_prop = font_manager.FontProperties(family='sans-serif')
+            font_prop_bold = font_manager.FontProperties(family='sans-serif', weight='bold')
+            font_prop_small = font_manager.FontProperties(family='sans-serif', size=10)
     else:
+        chinese_available = False
         font_prop = font_manager.FontProperties(family='sans-serif')
         font_prop_bold = font_manager.FontProperties(family='sans-serif', weight='bold')
         font_prop_small = font_manager.FontProperties(family='sans-serif', size=10)
@@ -769,19 +745,19 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
     y -= emoji_h
 
     # 标题
-    try:
+    if chinese_available:
         ax.text(30, y, title, fontsize=32, color='#2D3436',
                ha='center', va='top', fontproperties=font_prop_bold, weight='bold')
-    except:
+    else:
         ax.text(30, y, "Reading", fontsize=32, color='#2D3436',
                ha='center', va='top', weight='bold')
     y -= title_h
 
     # 作者
-    try:
+    if chinese_available:
         ax.text(30, y, author, fontsize=18, color='#636E72',
                ha='center', va='top', fontproperties=font_prop)
-    except:
+    else:
         ax.text(30, y, "By Author", fontsize=18, color='#636E72',
                ha='center', va='top')
     y -= author_h + 1
@@ -842,12 +818,12 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
     quote_start_y = quote_top - (quote_h - total_quote_height) / 2 - 1
 
     for i, line in enumerate(lines):
-        try:
+        if chinese_available:
             ax.text(30, quote_start_y - i * line_height, line,
                    fontsize=20, color='#2D3436',
                    ha='center', va='top',
                    fontproperties=font_prop_bold, weight='bold')
-        except:
+        else:
             if i == 0:
                 ax.text(30, quote_start_y, "Deep Reading",
                        fontsize=20, color='#2D3436',
@@ -871,19 +847,16 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
     ax.text(padding + 2, stats_y_start - 3, '📚', fontsize=18, va='center')
 
     # 数字
-    try:
-        ax.text(padding + 9, stats_y_start - 3, str(books_read),
-               fontsize=32, color='#667eea',
-               ha='center', va='center', weight='bold')
-    except:
-        pass
+    ax.text(padding + 9, stats_y_start - 3, str(books_read),
+           fontsize=32, color='#667eea',
+           ha='center', va='center', weight='bold')
 
     # 标签
-    try:
+    if chinese_available:
         ax.text(padding + 9, stats_y_start - 6, '已读书籍',
                fontsize=12, color='#636E72',
                ha='center', va='center', fontproperties=font_prop_small)
-    except:
+    else:
         ax.text(padding + 9, stats_y_start - 6, 'Books Read',
                fontsize=12, color='#636E72',
                ha='center', va='center')
@@ -904,11 +877,11 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
     except:
         pass
 
-    try:
+    if chinese_available:
         ax.text(padding + 9, y - 6, '阅读时长',
                fontsize=12, color='#636E72',
                ha='center', va='center', fontproperties=font_prop_small)
-    except:
+    else:
         ax.text(padding + 9, y - 6, 'Time Spent',
                fontsize=12, color='#636E72',
                ha='center', va='center')
@@ -916,17 +889,16 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
     # 底部品牌
     brand_y = y - stats_height - 2
 
-    try:
+    if chinese_available:
         ax.text(30, brand_y, "DeepRead 深读",
                fontsize=18, color='#667eea',
                ha='center', va='center',
                fontproperties=font_prop_bold, weight='bold')
-
         ax.text(30, brand_y - 2, "深度阅读 · 沉浸思考",
                fontsize=11, color='#636E72',
                ha='center', va='center',
                fontproperties=font_prop_small)
-    except:
+    else:
         ax.text(30, brand_y, "DeepRead",
                fontsize=18, color='#667eea',
                ha='center', va='center', weight='bold')

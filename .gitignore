@@ -59,6 +59,9 @@ data/
 *.sqlite
 *.sqlite3
 
+# Fonts (downloaded at runtime)
+fonts/
+
 # Temporary files
 nul
 *.tmp
