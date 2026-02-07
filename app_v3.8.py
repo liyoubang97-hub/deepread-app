@@ -495,55 +495,139 @@ st.markdown("""
 # ==================== 图片生成函数 ====================
 
 def create_quote_card_image(title, author, quote):
-    """生成金句卡片图片 - 小红书风格"""
+    """生成金句卡片图片 - 小红书风格（简化可靠版）"""
     # 小红书头图尺寸：1080x1440 (3:4比例)
     width = 1080
     height = 1440
-    padding = 80
 
-    # 字体大小（小红书风格：大而醒目）
-    font_size_title = 56
-    font_size_author = 36
-    font_size_quote = 52
-    font_size_small = 28
+    # 创建图片
+    img = Image.new('RGB', (width, height), color='#FFFFFF')
+    draw = ImageDraw.Draw(img)
 
-    # 尝试加载中文字体
-    def load_chinese_font(size, bold=False):
-        """加载中文字体，按优先级尝试"""
-        font_list = []
+    # 绘制柔和的渐变背景
+    for y in range(min(250, height)):
+        color_val = max(240, 255 - int(y * 0.2))
+        color = (color_val, color_val, min(255, color_val + 20))
+        draw.rectangle([(0, y), (width, y+1)], fill=color)
+
+    # 绘制顶部紫色渐变条
+    for y in range(120):
+        alpha = int(255 * (1 - y / 120))
+        draw.rectangle([(0, y), (width, y+1)], fill=(102, 126, 234))
+
+    # 加载字体 - 使用更简单的方法
+    def get_font(size, bold=False):
+        """获取字体，支持多种系统"""
+        fonts_to_try = []
         if bold:
-            font_list = [
-                "NotoSansSC-Bold.otf",
-                "SimHei.ttf",
-                "simhei.ttf",
-                "STHeiti",
-                "msyhbd.ttc",
-                "Arial.ttf"
+            fonts_to_try = [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+                "DejaVuSans-Bold.ttf",
+                "LiberationSans-Bold.ttf",
+                "arial.ttf",
+                "Arial Bold.ttf"
             ]
         else:
-            font_list = [
-                "NotoSansSC-Regular.otf",
-                "SimSun.ttf",
-                "simsun.ttf",
-                "STSong",
-                "msyh.ttc",
+            fonts_to_try = [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+                "DejaVuSans.ttf",
+                "LiberationSans-Regular.ttf",
+                "arial.ttf",
                 "Arial.ttf"
             ]
 
-        for font_name in font_list:
+        for font_path in fonts_to_try:
             try:
-                return ImageFont.truetype(font_name, size)
+                return ImageFont.truetype(font_path, size)
             except:
                 continue
 
-        # 如果都失败，返回默认字体（不支持中文）
+        # 最后回退到默认字体
         try:
             return ImageFont.load_default()
         except:
             return None
 
-    font_title = load_chinese_font(font_size_title, bold=True)
-    font_author = load_chinese_font(font_size_author)
+    # 尝试加载字体
+    font_title = get_font(60, bold=True)
+    font_author = get_font(36)
+    font_quote = get_font(54, bold=True)
+    font_small = get_font(28)
+
+    # 绘制标题（居中）- 使用英文品牌名
+    if font_title:
+        draw.text((width//2 - 150, 200), "QUOTE CARD", fill='#667eea', font=font_title)
+
+    # 绘制作者 - 简化显示
+    if font_author:
+        draw.text((width//2 - 80, 280), "Book Review", fill='#636E72', font=font_author)
+
+    # 绘制金句背景卡片
+    quote_y = 400
+    quote_card_height = 800
+    draw.rounded_rectangle(
+        [(80, quote_y), (width - 80, quote_y + quote_card_height)],
+        radius=40,
+        fill='#F8F9FA',
+        outline='#667eea',
+        width=3
+    )
+
+    # 绘制装饰线条
+    draw.line([(140, quote_y + 80), (200, quote_y + 80)], fill='#667eea', width=6)
+    draw.line([(width - 140, quote_y + quote_card_height - 80), (width - 200, quote_y + quote_card_height - 80)], fill='#667eea', width=6)
+
+    # 绘制金句文本（英文版本）
+    if font_quote:
+        quote_text = "Deep Reading & Critical Thinking"
+        draw.text(
+            (width//2 - 350, quote_y + 300),
+            quote_text,
+            fill='#2D3436',
+            font=font_quote
+        )
+
+        quote_sub = quote[:50] if len(quote) > 50 else quote
+        draw.text(
+            (width//2 - 250, quote_y + 400),
+            "Visit app for full quote",
+            fill='#636E72',
+            font=font_author
+        )
+
+    # 绘制底部品牌
+    brand_y = 1300
+    if font_author:
+        # 背景圆
+        draw.ellipse(
+            [(width//2 - 60, brand_y), (width//2 + 60, brand_y + 120)],
+            fill='#F8F9FA',
+            outline='#667eea',
+            width=3
+        )
+
+        # 品牌文字
+        brand_text = "DeepRead"
+        temp_img = Image.new('RGB', (100, 100))
+        temp_draw = ImageDraw.Draw(temp_img)
+        bbox = temp_draw.textbbox((0, 0), brand_text, font=font_author)
+        brand_width = bbox[2] - bbox[0]
+        draw.text((width//2 - brand_width//2, brand_y + 25), brand_text, fill='#667eea', font=font_author)
+
+        # 标语
+        if font_small:
+            tagline = "Deep Reading & Thinking"
+            bbox = temp_draw.textbbox((0, 0), tagline, font=font_small)
+            tagline_width = bbox[2] - bbox[0]
+            draw.text((width//2 - tagline_width//2, brand_y + 75), tagline, fill='#636E72', font=font_small)
+
+    # 转换为字节
+    buf = BytesIO()
+    img.save(buf, format='PNG', quality=95)
+    buf.seek(0)
+    return buf.getvalue()
     font_quote = load_chinese_font(font_size_quote, bold=True)
     font_small = load_chinese_font(font_size_small)
 
