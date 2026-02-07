@@ -1262,18 +1262,18 @@ def render_library():
     # ========== 控制面板：搜索、排序、视图 ==========
     st.markdown('<div class="section-block">', unsafe_allow_html=True)
 
-    # 第一行：搜索框和排序选择
-    col_search, col_sort = st.columns([2, 1])
+    # 搜索框（保留在外面）
+    search_query = st.text_input(
+        "🔍 搜索书籍",
+        placeholder="输入书名、作者或关键词...",
+        label_visibility="visible",
+        key="book_search"
+    )
 
-    with col_search:
-        search_query = st.text_input(
-            "🔍 搜索书籍",
-            placeholder="输入书名、作者或关键词...",
-            label_visibility="visible",
-            key="book_search"
-        )
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    with col_sort:
+    # ========== 排序和视图选择（折叠） ==========
+    with st.expander("🎛️ 排序与视图设置（点击展开）", expanded=False):
         # 初始化排序选项
         if 'sort_option' not in st.session_state:
             st.session_state.sort_option = "默认"
