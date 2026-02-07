@@ -916,6 +916,126 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
     return buf.getvalue()
 
 
+def generate_quote_card_html(title, author, quote):
+    """生成金句卡片的HTML（用于截图备用）"""
+    # 处理换行
+    quote_display = quote.replace('\n', '<br/>')
+
+    html = f"""
+    <div style="
+        width: 100%;
+        max-width: 540px;
+        min-height: 720px;
+        margin: 20px auto;
+        background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+        border-radius: 20px;
+        padding: 40px 30px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        box-sizing: border-box;
+        position: relative;
+        overflow: hidden;
+    ">
+        <!-- 顶部装饰条 -->
+        <div style="
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        "></div>
+
+        <!-- 内容区域 -->
+        <div style="margin-top: 40px; text-align: center;">
+
+            <!-- 标题 -->
+            <h2 style="
+                font-family: 'Noto Serif SC', serif;
+                font-size: 32px;
+                font-weight: 700;
+                color: #667eea;
+                margin: 0 0 15px 0;
+                letter-spacing: 0.02em;
+            ">{title}</h2>
+
+            <!-- 作者 -->
+            <p style="
+                font-family: 'Inter', sans-serif;
+                font-size: 18px;
+                color: #636E72;
+                margin: 0 0 40px 0;
+            ">{author}</p>
+
+            <!-- 金句卡片 -->
+            <div style="
+                background: #F8F9FA;
+                border-radius: 16px;
+                padding: 40px 30px;
+                margin: 30px 0;
+                border-left: 4px solid #667eea;
+                position: relative;
+            ">
+                <!-- 装饰线条 -->
+                <div style="
+                    position: absolute;
+                    top: 20px;
+                    left: 20px;
+                    width: 40px;
+                    height: 3px;
+                    background: #667eea;
+                "></div>
+                <div style="
+                    position: absolute;
+                    bottom: 20px;
+                    right: 20px;
+                    width: 40px;
+                    height: 3px;
+                    background: #667eea;
+                "></div>
+
+                <!-- 金句文本 -->
+                <p style="
+                    font-family: 'Noto Serif SC', serif;
+                    font-size: 26px;
+                    font-weight: 600;
+                    color: #2D3436;
+                    line-height: 1.8;
+                    margin: 0;
+                ">{quote_display}</p>
+            </div>
+
+            <!-- 品牌区域 -->
+            <div style="
+                margin-top: 60px;
+                padding-top: 30px;
+                border-top: 2px solid #E8EEF2;
+            ">
+                <div style="
+                    display: inline-block;
+                    padding: 15px 30px;
+                    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+                    border-radius: 30px;
+                ">
+                    <p style="
+                        font-family: 'Noto Serif SC', serif;
+                        font-size: 20px;
+                        font-weight: 700;
+                        color: #667eea;
+                        margin: 0 0 5px 0;
+                    ">DeepRead 深读</p>
+                    <p style="
+                        font-family: 'Inter', sans-serif;
+                        font-size: 14px;
+                        color: #636E72;
+                        margin: 0;
+                    ">深度阅读 · 沉浸思考</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    """
+    return html
+
 
 def init_session_state():
     """初始化session state"""
@@ -2606,9 +2726,17 @@ def render_reflection(content):
         title_display = content['title'].replace('\n', '<br/>')
         author_display = content['author'].replace('\n', '<br/>')
 
+        # HTML 卡片（用于截图）
         card_html = f'<div style="width: 100%; max-width: 500px; margin: 2rem auto; padding: 3rem 2rem; background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%); border-radius: 20px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08); text-align: center; position: relative; overflow: hidden; border: 1px solid rgba(102, 126, 234, 0.1);"><div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);"></div><div style="margin-bottom: 2.5rem;"><div style="font-size: 1.1rem; color: #667eea; font-weight: 600; margin-bottom: 0.5rem;">{title_display}</div><div style="font-size: 0.9rem; color: #636E72; font-style: italic;">{author_display}</div></div><div style="background: linear-gradient(145deg, #f8f9fa 0%, #e8eef2 100%); border-radius: 16px; padding: 2rem; margin-bottom: 2.5rem; border: 1px solid rgba(102, 126, 234, 0.1);"><div style="font-size: 1.4rem; line-height: 1.9; color: #2D3436; font-weight: 600; position: relative; display: inline-block;">{quote_display}</div></div><div style="display: flex; flex-direction: column; gap: 0.75rem; align-items: center;"><div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1.5rem; background: rgba(102, 126, 234, 0.1); border-radius: 25px;"><span style="font-size: 1.2rem;">🧠</span><span style="color: #667eea; font-weight: 600; font-size: 0.95rem;">DeepRead 深读</span></div><div style="font-size: 0.75rem; color: #636E72; font-style: italic;">深度阅读 · 沉浸思考</div></div></div>'
 
         st.markdown(card_html, unsafe_allow_html=True)
+
+        # 提示信息
+        st.markdown("""
+        <div style="text-align: center; color: #636E72; font-size: 0.85rem; margin: 1rem 0;">
+            💡 提示：如果下载的图片中文显示不正确，请直接截图上方卡片
+        </div>
+        """, unsafe_allow_html=True)
 
         # 下载图片按钮
         img_data = create_quote_card_image(content['title'], content['author'], selected_quote)
@@ -2682,6 +2810,13 @@ def render_reflection(content):
 </div>
 </div>'''
         st.markdown(poster_html, unsafe_allow_html=True)
+
+        # 提示信息
+        st.markdown("""
+        <div style="text-align: center; color: #636E72; font-size: 0.85rem; margin: 1rem 0;">
+            💡 提示：如果下载的图片中文显示不正确，请直接截图上方海报
+        </div>
+        """, unsafe_allow_html=True)
 
         # 下载图片按钮
         poster_stats = {
