@@ -12,6 +12,9 @@ from pathlib import Path
 import sys
 import time
 from datetime import datetime
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont
+import base64
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -487,6 +490,272 @@ st.markdown("""
 
 </style>
 """, unsafe_allow_html=True)
+
+
+# ==================== 图片生成函数 ====================
+
+def create_quote_card_image(title, author, quote):
+    """生成金句卡片图片"""
+    # 图片尺寸
+    width = 600
+    padding = 60
+    font_size_title = 28
+    font_size_author = 20
+    font_size_quote = 32
+
+    # 计算高度（根据文本长度）
+    try:
+        # 尝试使用系统中文字体
+        font_title = ImageFont.truetype("msyh.ttc", font_size_title)  # 微软雅黑
+        font_author = ImageFont.truetype("msyh.ttc", font_size_author)
+        font_quote = ImageFont.truetype("msyhbd.ttc", font_size_quote)  # 微软雅黑粗体
+        font_small = ImageFont.truetype("msyh.ttc", 16)
+    except:
+        try:
+            # 备用字体
+            font_title = ImageFont.truetype("arial.ttf", font_size_title)
+            font_author = ImageFont.truetype("arial.ttf", font_size_author)
+            font_quote = ImageFont.truetype("arialbd.ttf", font_size_quote)
+            font_small = ImageFont.truetype("arial.ttf", 16)
+        except:
+            # 使用默认字体
+            font_title = ImageFont.load_default()
+            font_author = ImageFont.load_default()
+            font_quote = ImageFont.load_default()
+            font_small = ImageFont.load_default()
+
+    # 临时创建用于测量文本的图片
+    temp_img = Image.new('RGB', (width, 100))
+    temp_draw = ImageDraw.Draw(temp_img)
+
+    # 测量标题
+    title_bbox = temp_draw.textbbox((0, 0), title, font=font_title)
+    title_height = title_bbox[3] - title_bbox[1]
+
+    # 测量作者
+    author_bbox = temp_draw.textbbox((0, 0), author, font=font_author)
+    author_height = author_bbox[3] - author_bbox[1]
+
+    # 测量金句（处理换行）
+    max_quote_width = width - 2 * padding - 40
+    lines = []
+    words = quote
+    for char in words:
+        test_line = lines[-1] + char if lines else char
+        bbox = temp_draw.textbbox((0, 0), test_line, font=font_quote)
+        if bbox[2] - bbox[0] <= max_quote_width:
+            if lines:
+                lines[-1] = test_line
+            else:
+                lines.append(test_line)
+        else:
+            lines.append(char)
+
+    quote_height = len(lines) * (font_size_quote + 8)
+
+    # 计算总高度
+    total_height = (
+        padding +  # 顶部渐变条空间
+        title_height + 20 +  # 标题区域
+        author_height + 20 +  # 作者区域
+        40 +  # 金句卡片padding
+        quote_height + 40 +  # 金句文本
+        80 +  # 底部品牌区域
+        padding  # 底部padding
+    )
+
+    # 创建图片
+    img = Image.new('RGB', (width, total_height), color='#F8F9FA')
+    draw = ImageDraw.Draw(img)
+
+    # 绘制背景渐变（简化为纯色）
+    draw.rectangle([(0, 0), (width, total_height)], fill='#FFFFFF')
+
+    # 绘制顶部渐变条
+    for i in range(8):
+        alpha = int(255 * (1 - i / 8))
+        color = f"rgba(102, 126, 234, {alpha})"
+        draw.rectangle([(0, i), (width, i+1)], fill='#667eea')
+
+    # 绘制标题
+    draw.text((padding, 30), title, fill='#667eea', font=font_title)
+
+    # 绘制作者
+    draw.text((padding, 30 + title_height + 10), author, fill='#636E72', font=font_author)
+
+    # 绘制金句背景卡片
+    quote_y = 30 + title_height + 10 + author_height + 30
+    draw.rectangle(
+        [(padding, quote_y), (width - padding, quote_y + quote_height + 40)],
+        fill='#F8F9FA',
+        outline='#E8EEF2',
+        width=1
+    )
+
+    # 绘制金句文本
+    for i, line in enumerate(lines):
+        draw.text(
+            (padding + 20, quote_y + 20 + i * (font_size_quote + 8)),
+            line,
+            fill='#2D3436',
+            font=font_quote
+        )
+
+    # 绘制底部品牌区域
+    brand_y = quote_y + quote_height + 60
+    try:
+        # 绘制圆形背景
+        draw.ellipse(
+            [(width//2 - 70, brand_y), (width//2 - 30, brand_y + 40)],
+            fill='rgba(102, 126, 234, 0.1)',
+            outline='#667eea'
+        )
+        # 绘制大脑emoji（用文本代替）
+        draw.text((width//2 - 58, brand_y + 3), '🧠', font=font_small)
+
+        # 绘制品牌文字
+        brand_text = "DeepRead 深读"
+        brand_bbox = draw.textbbox((0, 0), brand_text, font=font_author)
+        brand_width = brand_bbox[2] - brand_bbox[0]
+        draw.text((width//2 - brand_width//2 + 25, brand_y + 8), brand_text, fill='#667eea', font=font_author)
+
+        # 绘制副标题
+        tagline = "深度阅读 · 沉浸思考"
+        tagline_bbox = draw.textbbox((0, 0), tagline, font=font_small)
+        tagline_width = tagline_bbox[2] - tagline_bbox[0]
+        draw.text((width//2 - tagline_width//2, brand_y + 55), tagline, fill='#636E72', font=font_small)
+    except:
+        pass
+
+    # 转换为字节
+    buf = BytesIO()
+    img.save(buf, format='PNG', quality=95)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def create_reading_poster_image(title, author, emoji, tags, quote, stats):
+    """生成阅读海报图片"""
+    # 图片尺寸
+    width = 600
+    padding = 50
+
+    try:
+        font_title = ImageFont.truetype("msyhbd.ttc", 36)
+        font_author = ImageFont.truetype("msyh.ttc", 22)
+        font_tag = ImageFont.truetype("msyh.ttc", 14)
+        font_quote = ImageFont.truetype("msyh.ttc", 24)
+        font_number = ImageFont.truetype("msyhbd.ttc", 40)
+        font_label = ImageFont.truetype("msyh.ttc", 14)
+        font_small = ImageFont.truetype("msyh.ttc", 12)
+    except:
+        font_title = ImageFont.load_default()
+        font_author = ImageFont.load_default()
+        font_tag = ImageFont.load_default()
+        font_quote = ImageFont.load_default()
+        font_number = ImageFont.load_default()
+        font_label = ImageFont.load_default()
+        font_small = ImageFont.load_default()
+
+    # 临时图片用于测量
+    temp_img = Image.new('RGB', (width, 100))
+    temp_draw = ImageDraw.Draw(temp_img)
+
+    # 计算高度
+    title_h = 50
+    emoji_h = 80
+    author_h = 30
+    tags_h = 30
+    quote_h = 100
+    stats_h = 180
+
+    total_height = padding + emoji_h + title_h + author_h + tags_h + padding + quote_h + padding + stats_h + padding
+
+    # 创建图片
+    img = Image.new('RGB', (width, total_height), color='#FFFFFF')
+    draw = ImageDraw.Draw(img)
+
+    # 绘制背景
+    draw.rectangle([(0, 0), (width, total_height)], fill='#FFFFFF')
+
+    # 顶部区域
+    y = padding
+
+    # Emoji
+    draw.text((width//2 - 40, y), emoji, font=ImageFont.load_default())
+    y += emoji_h
+
+    # 标题
+    title_bbox = temp_draw.textbbox((0, 0), title, font=font_title)
+    title_w = title_bbox[2] - title_bbox[0]
+    draw.text(((width - title_w)//2, y), title, fill='#2D3436', font=font_title)
+    y += title_h
+
+    # 作者
+    author_bbox = temp_draw.textbbox((0, 0), author, font=font_author)
+    author_w = author_bbox[2] - author_bbox[0]
+    draw.text(((width - author_w)//2, y), author, fill='#636E72', font=font_author)
+    y += author_h + 10
+
+    # 标签
+    if tags:
+        tag_x = padding
+        for tag in tags[:3]:  # 最多3个标签
+            tag_bbox = temp_draw.textbbox((0, 0), tag, font=font_tag)
+            tag_w = tag_bbox[2] - tag_bbox[0] + 20
+            if tag_x + tag_w > width - padding:
+                break
+            draw.rectangle([(tag_x, y), (tag_x + tag_w, y + 25)], fill='rgba(102, 126, 234, 0.1)', outline='#667eea')
+            draw.text((tag_x + 10, y + 3), tag, fill='#667eea', font=font_tag)
+            tag_x += tag_w + 10
+        y += tags_h + 20
+
+    # 金句区域
+    draw.rectangle([(padding, y), (width - padding, y + quote_h)], fill='#F8F9FA', outline='#667eea', width=4)
+    y += 15
+
+    # 金句文本（简化处理，只显示前两行）
+    quote_lines = quote.split('\n')[:2]
+    for i, line in enumerate(quote_lines):
+        draw.text((padding + 15, y + i * 30), line, fill='#2D3436', font=font_quote)
+
+    y += quote_h + padding
+
+    # 统计区域
+    books_read = stats.get('books_read', 0)
+    time_text = stats.get('time_display', '0分钟')
+
+    # 已读书籍
+    draw.rectangle([(padding, y), (width - padding, y + 80)], fill='rgba(102, 126, 234, 0.05)', outline='#667eea')
+    draw.text((padding + 70, y + 15), str(books_read), fill='#667eea', font=font_number)
+    draw.text((padding + 70, y + 50), '已读书籍', fill='#636E72', font=font_label)
+    draw.text((padding + 15, y + 25), '📚', font=ImageFont.load_default())
+
+    # 阅读时长
+    y += 90
+    draw.rectangle([(padding, y), (width - padding, y + 80)], fill='rgba(118, 75, 162, 0.05)', outline='#764ba2')
+    draw.text((padding + 70, y + 15), time_text, fill='#764ba2', font=font_number)
+    draw.text((padding + 70, y + 50), '阅读时长', fill='#636E72', font=font_label)
+    draw.text((padding + 15, y + 25), '⏱️', font=ImageFont.load_default())
+
+    # 底部品牌
+    y = total_height - 40
+    brand_text = "DeepRead 深读"
+    brand_bbox = temp_draw.textbbox((0, 0), brand_text, font=font_author)
+    brand_w = brand_bbox[2] - brand_bbox[0]
+    draw.text(((width - brand_w)//2, y), brand_text, fill='#667eea', font=font_author)
+
+    tagline = "深度阅读 · 沉浸思考"
+    tagline_bbox = temp_draw.textbbox((0, 0), tagline, font=font_small)
+    tagline_w = tagline_bbox[2] - tagline_bbox[0]
+    draw.text(((width - tagline_w)//2, y + 25), tagline, fill='#636E72', font=font_small)
+
+    # 转换为字节
+    buf = BytesIO()
+    img.save(buf, format='PNG', quality=95)
+    buf.seek(0)
+    return buf.getvalue()
+
 
 
 def init_session_state():
@@ -2183,9 +2452,20 @@ def render_reflection(content):
         title_display = content['title'].replace('\n', '<br/>')
         author_display = content['author'].replace('\n', '<br/>')
 
-        card_html = f'<div style="width: 100%; max-width: 500px; margin: 2rem auto; padding: 3rem 2rem; background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%); border-radius: 20px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08); text-align: center; position: relative; overflow: hidden; border: 1px solid rgba(102, 126, 234, 0.1);"><div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);"></div><div style="margin-bottom: 2.5rem;"><div style="font-size: 1.1rem; color: #667eea; font-weight: 600; margin-bottom: 0.5rem;">{title_display}</div><div style="font-size: 0.9rem; color: #636E72; font-style: italic;">{author_display}</div></div><div style="background: linear-gradient(145deg, #f8f9fa 0%, #e8eef2 100%); border-radius: 16px; padding: 2rem; margin-bottom: 2.5rem; border: 1px solid rgba(102, 126, 234, 0.1);"><div style="font-size: 1.4rem; line-height: 1.9; color: #2D3436; font-weight: 600; position: relative; display: inline-block;">{quote_display}</div></div><div style="display: flex; flex-direction: column; gap: 0.75rem; align-items: center;"><div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1.5rem; background: rgba(102, 126, 234, 0.1); border-radius: 25px;"><span style="font-size: 1.2rem;">🧠</span><span style="color: #667eea; font-weight: 600; font-size: 0.95rem;">DeepRead 深读</span></div><div style="font-size: 0.75rem; color: #636E72; font-style: italic;">深度阅读 · 沉浸思考</div></div></div><div style="text-align: center; margin: 2rem 0; color: #636E72; font-size: 0.85rem;"><strong>💡 如何分享：</strong><br/>1. 在电脑上：截图后保存图片<br/>2. 在手机上：长按卡片区域保存图片<br/>3. 分享到朋友圈、小红书、微博等社交平台</div>'
+        card_html = f'<div style="width: 100%; max-width: 500px; margin: 2rem auto; padding: 3rem 2rem; background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%); border-radius: 20px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08); text-align: center; position: relative; overflow: hidden; border: 1px solid rgba(102, 126, 234, 0.1);"><div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);"></div><div style="margin-bottom: 2.5rem;"><div style="font-size: 1.1rem; color: #667eea; font-weight: 600; margin-bottom: 0.5rem;">{title_display}</div><div style="font-size: 0.9rem; color: #636E72; font-style: italic;">{author_display}</div></div><div style="background: linear-gradient(145deg, #f8f9fa 0%, #e8eef2 100%); border-radius: 16px; padding: 2rem; margin-bottom: 2.5rem; border: 1px solid rgba(102, 126, 234, 0.1);"><div style="font-size: 1.4rem; line-height: 1.9; color: #2D3436; font-weight: 600; position: relative; display: inline-block;">{quote_display}</div></div><div style="display: flex; flex-direction: column; gap: 0.75rem; align-items: center;"><div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1.5rem; background: rgba(102, 126, 234, 0.1); border-radius: 25px;"><span style="font-size: 1.2rem;">🧠</span><span style="color: #667eea; font-weight: 600; font-size: 0.95rem;">DeepRead 深读</span></div><div style="font-size: 0.75rem; color: #636E72; font-style: italic;">深度阅读 · 沉浸思考</div></div></div>'
 
         st.markdown(card_html, unsafe_allow_html=True)
+
+        # 下载图片按钮
+        img_data = create_quote_card_image(content['title'], content['author'], selected_quote)
+        st.download_button(
+            label="⬇️ 下载金句卡片图片",
+            data=img_data,
+            file_name=f"金句卡片_{content['title']}.png",
+            mime="image/png",
+            use_container_width=True,
+            key=f"download_card_{content['title']}"
+        )
 
     # 阅读海报生成
     st.markdown('<div style="margin-top: 2rem;"></div>', unsafe_allow_html=True)
@@ -2246,11 +2526,30 @@ def render_reflection(content):
     </div>
     <div style="font-size: 0.75rem; color: #636E72; margin-top: 0.75rem; font-style: italic;">深度阅读 · 沉浸思考</div>
 </div>
-</div>
-<div style="text-align: center; margin: 2rem 0; color: #636E72; font-size: 0.85rem;">
-    <strong>💡 如何分享：</strong><br/>1. 在电脑上：截图后保存图片<br/>2. 在手机上：长按海报区域保存图片<br/>3. 分享到朋友圈、小红书、微博等社交平台
 </div>'''
         st.markdown(poster_html, unsafe_allow_html=True)
+
+        # 下载图片按钮
+        poster_stats = {
+            'books_read': books_read,
+            'time_display': time_display
+        }
+        img_data = create_reading_poster_image(
+            content['title'],
+            content['author'],
+            book_info['emoji'] if book_info else '📖',
+            book_info['tags'] if book_info else [],
+            selected_quote,
+            poster_stats
+        )
+        st.download_button(
+            label="⬇️ 下载阅读海报图片",
+            data=img_data,
+            file_name=f"阅读海报_{content['title']}.png",
+            mime="image/png",
+            use_container_width=True,
+            key=f"download_poster_{content['title']}"
+        )
 
     # 分享文案
     st.markdown('<div style="margin-top: 2rem;"></div>', unsafe_allow_html=True)
