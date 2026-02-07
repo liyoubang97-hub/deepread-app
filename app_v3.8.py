@@ -15,6 +15,11 @@ from datetime import datetime
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import base64
+import matplotlib
+matplotlib.use('Agg')  # 非交互式后端
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib import font_manager
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -495,416 +500,447 @@ st.markdown("""
 # ==================== 图片生成函数 ====================
 
 def create_quote_card_image(title, author, quote):
-    """生成金句卡片图片 - 小红书风格（支持中文，简化版）"""
+    """生成金句卡片图片 - 使用matplotlib（更好的中文支持）"""
     # 小红书头图尺寸：1080x1440 (3:4比例)
-    width = 1080
-    height = 1440
+    # 使用英寸单位，dpi=100，所以 10.8x14.4 英寸
+    width_inch = 10.8
+    height_inch = 14.4
+    dpi = 100
 
-    # 创建图片
-    img = Image.new('RGB', (width, height), color='#FFFFFF')
-    draw = ImageDraw.Draw(img)
+    # 创建图形
+    fig, ax = plt.subplots(figsize=(width_inch, height_inch), dpi=dpi)
+    ax.set_xlim(0, 108)
+    ax.set_ylim(0, 144)
+    ax.axis('off')
 
-    # 绘制柔和的渐变背景
-    for y in range(min(250, height)):
-        color_val = max(240, 255 - int(y * 0.2))
-        color = (color_val, color_val, min(255, color_val + 20))
-        draw.rectangle([(0, y), (width, y+1)], fill=color)
+    # 配置中文字体
+    def get_chinese_font():
+        """获取中文字体路径"""
+        import platform
+        system = platform.system()
 
-    # 绘制顶部紫色渐变条
-    for y in range(120):
-        draw.rectangle([(0, y), (width, y+1)], fill=(102, 126, 234))
+        font_paths = []
 
-    # 加载字体 - 支持中文
-    def get_font(size, bold=False):
-        """获取字体，优先使用中文字体"""
-        if bold:
-            font_list = [
-                "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-                "/usr/share/fonts/truetype/arphic/uming.ttc",
-                "C:/Windows/Fonts/msyhbd.ttc",
-                "C:/Windows/Fonts/simhei.ttf",
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-                "arialbd.ttf",
+        if system == 'Linux':
+            # Linux 常见中文字体路径
+            font_paths = [
+                '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+                '/usr/share/fonts/truetype/arphic/uming.ttc',
+                '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+                '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+                '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
             ]
-        else:
-            font_list = [
-                "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-                "/usr/share/fonts/truetype/arphic/uming.ttc",
-                "C:/Windows/Fonts/msyh.ttc",
-                "C:/Windows/Fonts/simsun.ttc",
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                "arial.ttf",
+        elif system == 'Darwin':  # macOS
+            font_paths = [
+                '/System/Library/Fonts/PingFang.ttc',
+                '/System/Library/Fonts/STHeiti Light.ttc',
+                '/Library/Fonts/Arial Unicode.ttf',
+            ]
+        elif system == 'Windows':
+            font_paths = [
+                'C:/Windows/Fonts/msyh.ttc',
+                'C:/Windows/Fonts/msyhbd.ttc',
+                'C:/Windows/Fonts/simhei.ttf',
+                'C:/Windows/Fonts/simsun.ttc',
             ]
 
-        for font_path in font_list:
+        # 尝试找到可用的中文字体
+        for font_path in font_paths:
             try:
-                return ImageFont.truetype(font_path, size)
+                # 检查文件是否存在
+                import os
+                if os.path.exists(font_path):
+                    return font_path
             except:
                 continue
 
-        return ImageFont.load_default()
+        return None
 
-    # 加载字体
+    # 设置字体
+    chinese_font_path = get_chinese_font()
+    if chinese_font_path:
+        # 注册并使用中文字体
+        font_prop = font_manager.FontProperties(fname=chinese_font_path)
+        font_prop_bold = font_manager.FontProperties(fname=chinese_font_path, weight='bold')
+    else:
+        # 使用默认字体（可能不支持中文）
+        font_prop = font_manager.FontProperties(family='sans-serif')
+        font_prop_bold = font_manager.FontProperties(family='sans-serif', weight='bold')
+
+    # 绘制白色背景
+    ax.add_patch(patches.Rectangle((0, 0), 108, 144, facecolor='white', edgecolor='none'))
+
+    # 绘制顶部紫色渐变条
+    for y in range(12):
+        alpha = 1 - y / 12
+        ax.add_patch(patches.Rectangle((0, y), 108, 1, facecolor='#667eea', alpha=alpha))
+
+    # 绘制柔和的渐变背景（顶部区域）
+    for y in range(12, 25):
+        color_val = 1 - (y - 12) * 0.04
+        ax.add_patch(patches.Rectangle((0, y), 108, 1, facecolor=(color_val, color_val, min(1, color_val + 0.08))))
+
+    # 绘制标题
     try:
-        font_title = get_font(64, bold=True)
-        font_author = get_font(40)
-        font_quote = get_font(56, bold=True)
-        font_small = get_font(30)
+        ax.text(54, 17.5, title, fontsize=56, color='#667eea',
+                ha='center', va='center', fontproperties=font_prop_bold, weight='bold')
+    except:
+        ax.text(54, 17.5, "QUOTE CARD", fontsize=56, color='#667eea',
+                ha='center', va='center', weight='bold')
 
-        # 测试字体是否支持中文
-        test_img = Image.new('RGB', (100, 100))
-        test_draw = ImageDraw.Draw(test_img)
-        test_bbox = test_draw.textbbox((0, 0), "测", font=font_title)
-        chinese_support = test_bbox[2] - test_bbox[0] > 10
+    # 绘制作者
+    try:
+        ax.text(54, 13.5, author, fontsize=36, color='#636E72',
+                ha='center', va='center', fontproperties=font_prop)
+    except:
+        ax.text(54, 13.5, "By Author", fontsize=36, color='#636E72',
+                ha='center', va='center')
 
-        # 绘制标题（居中）
-        if chinese_support:
-            try:
-                bbox = draw.textbbox((0, 0), title, font=font_title)
-                title_width = bbox[2] - bbox[0]
-                draw.text(((width - title_width) // 2, 180), title, fill='#667eea', font=font_title)
-            except:
-                chinese_support = False
-
-        if not chinese_support:
-            draw.text((width//2 - 150, 180), "QUOTE CARD", fill='#667eea', font=font_title)
-
-        # 绘制作者（居中）
-        if chinese_support:
-            try:
-                bbox = draw.textbbox((0, 0), author, font=font_author)
-                author_width = bbox[2] - bbox[0]
-                draw.text(((width - author_width) // 2, 260), author, fill='#636E72', font=font_author)
-            except:
-                pass
-        else:
-            draw.text((width//2 - 80, 260), "By Author", fill='#636E72', font=font_author)
-
-        # 绘制金句背景卡片
-        quote_y = 380
-        quote_card_height = 800
-        draw.rounded_rectangle(
-            [(80, quote_y), (width - 80, quote_y + quote_card_height)],
-            radius=40,
-            fill='#F8F9FA',
-            outline='#667eea',
-            width=4
-        )
-
-        # 绘制装饰线条
-        draw.line([(140, quote_y + 100), (220, quote_y + 100)], fill='#667eea', width=8)
-        draw.line([(width - 140, quote_y + quote_card_height - 100), (width - 220, quote_y + quote_card_height - 100)], fill='#667eea', width=8)
-
-        # 绘制金句文本
-        quote_clean = quote.replace('\n', ' ').strip()
-        max_chars_per_line = 16
-
-        if chinese_support:
-            # 中文显示
-            lines = []
-            current_line = ""
-            for char in quote_clean:
-                test_line = current_line + char
-                try:
-                    bbox = draw.textbbox((0, 0), test_line, font=font_quote)
-                    test_width = bbox[2] - bbox[0]
-                except:
-                    test_width = len(test_line) * 35
-
-                if test_width < width - 200:
-                    current_line = test_line
-                else:
-                    if current_line:
-                        lines.append(current_line)
-                    current_line = char
-
-            if current_line:
-                lines.append(current_line)
-
-            lines = lines[:4]
-
-            line_height = 75
-            total_height = len(lines) * line_height
-            start_y = quote_y + (quote_card_height - total_height) // 2 - 50
-
-            for i, line in enumerate(lines):
-                try:
-                    bbox = draw.textbbox((0, 0), line, font=font_quote)
-                    line_width = bbox[2] - bbox[0]
-                    draw.text(
-                        ((width - line_width) // 2, start_y + i * line_height),
-                        line,
-                        fill='#2D3436',
-                        font=font_quote
-                    )
-                except:
-                    pass
-        else:
-            # 英文回退
-            draw.text((width//2 - 250, quote_y + 300), "Deep Reading", fill='#2D3436', font=font_title)
-            draw.text((width//2 - 350, quote_y + 380), "Critical Thinking", fill='#636E72', font=font_author)
-            draw.text((width//2 - 400, quote_y + 460), "Visit app for full content", fill='#636E72', font=font_small)
-
-        # 绘制底部品牌
-        brand_y = 1280
-        draw.ellipse(
-            [(width//2 - 60, brand_y), (width//2 + 60, brand_y + 120)],
-            fill='#F8F9FA',
-            outline='#667eea',
-            width=4
-        )
-
-        if chinese_support:
-            try:
-                brand_text = "DeepRead 深读"
-                bbox = draw.textbbox((0, 0), brand_text, font=font_author)
-                brand_width = bbox[2] - bbox[0]
-                draw.text((width//2 - brand_width//2, brand_y + 30), brand_text, fill='#667eea', font=font_author)
-
-                if font_small:
-                    tagline = "深度阅读 · 沉浸思考"
-                    bbox = draw.textbbox((0, 0), tagline, font=font_small)
-                    tagline_width = bbox[2] - bbox[0]
-                    draw.text((width//2 - tagline_width//2, brand_y + 80), tagline, fill='#636E72', font=font_small)
-            except:
-                draw.text((width//2 - 80, brand_y + 30), "DeepRead", fill='#667eea', font=font_author)
-        else:
-            draw.text((width//2 - 80, brand_y + 30), "DeepRead", fill='#667eea', font=font_author)
-
-    except Exception as e:
-        # 如果出错，创建一个简单的错误提示图片
-        draw.rectangle([(100, 400), (width-100, 700)], fill='#F8F9FA', outline='#667eea', width=3)
-        try:
-            default_font = ImageFont.load_default()
-            draw.text((width//2 - 100, 500), "Image Generation", fill='#2D3436', font=default_font)
-            draw.text((width//2 - 120, 560), "Please try again", fill='#636E72', font=default_font)
-        except:
-            pass
-
-    # 转换为字节
-    buf = BytesIO()
-    img.save(buf, format='PNG', quality=95)
-    buf.seek(0)
-    return buf.getvalue()
-
-
-def create_reading_poster_image(title, author, emoji, tags, quote, stats):
-    img = Image.new('RGB', (width, height), color='#FFFFFF')
-    draw = ImageDraw.Draw(img)
-
-    # 绘制柔和的渐变背景（从上到下）
-    for y in range(min(200, height)):
-        alpha = max(0, min(255, 255 - int(y * 1.2)))
-        color = (
-            max(102, 255 - int(y * 0.8)),
-            max(126, 255 - int(y * 0.8)),
-            234
-        )
-        draw.rectangle([(0, y), (width, y+1)], fill=color)
-
-    # 绘制标题（居中，大而醒目）
-    if font_title:
-        title_bbox = draw.textbbox((0, 0), title, font=font_title)
-        title_width = title_bbox[2] - title_bbox[0]
-        draw.text(((width - title_width) // 2, 200), title, fill='#667eea', font=font_title)
-
-    # 绘制作者（居中）
-    if font_author:
-        author_bbox = draw.textbbox((0, 0), author, font=font_author)
-        author_width = author_bbox[2] - author_bbox[0]
-        draw.text(((width - author_width) // 2, 280), author, fill='#636E72', font=font_author)
-
-    # 绘制金句背景（优雅的卡片）
-    quote_y = 400
-    quote_card_height = 800
-    draw.rounded_rectangle(
-        [(padding, quote_y), (width - padding, quote_y + quote_card_height)],
-        radius=40,
-        fill='#F8F9FA',
-        outline='#667eea'
-    )
+    # 绘制金句背景卡片
+    quote_y = 38
+    quote_height = 80
+    ax.add_patch(patches.FancyBboxPatch((8, quote_y), 100, quote_height,
+                                        boxstyle="round,pad=3",
+                                        facecolor='#F8F9FA',
+                                        edgecolor='#667eea', linewidth=0.4))
 
     # 绘制装饰线条
-    draw.line([(padding + 60, quote_y + 80), (padding + 120, quote_y + 80)], fill='#667eea', width=6)
-    draw.line([(width - padding - 60, quote_y + quote_card_height - 80), (width - padding - 120, quote_y + quote_card_height - 80)], fill='#667eea', width=6)
+    ax.plot([14, 22], [quote_y + 70, quote_y + 70], color='#667eea', linewidth=0.8)
+    ax.plot([86, 94], [quote_y + 10, quote_y + 10], color='#667eea', linewidth=0.8)
 
-    # 绘制金句文本（简化处理，避免乱码）
-    if font_quote:
-        # 分行处理（最多显示4行）
-        max_chars_per_line = 18
-        quote_text = quote.replace('\n', ' ')
-        lines = []
-        for i in range(0, len(quote_text), max_chars_per_line):
-            lines.append(quote_text[i:i+max_chars_per_line])
+    # 处理金句文本（分行显示）
+    quote_clean = quote.replace('\n', ' ').strip()
 
-        # 限制最多4行
-        lines = lines[:4]
+    # 简单按字符数分行（每行约16个字符）
+    lines = []
+    current_line = ""
+    for char in quote_clean:
+        if len(current_line) < 16:
+            current_line += char
+        else:
+            lines.append(current_line)
+            current_line = char
+    if current_line:
+        lines.append(current_line)
 
-        # 计算垂直居中
-        total_quote_height = len(lines) * (font_size_quote + 20)
-        start_y = quote_y + (quote_card_height - total_quote_height) // 2 - 40
+    lines = lines[:4]  # 最多4行
 
-        for i, line in enumerate(lines):
-            line_bbox = draw.textbbox((0, 0), line, font=font_quote)
-            line_width = line_bbox[2] - line_bbox[0]
-            draw.text(
-                ((width - line_width) // 2, start_y + i * (font_size_quote + 20)),
-                line,
-                fill='#2D3436',
-                font=font_quote
-            )
+    # 绘制金句文本（垂直居中）
+    line_height = 7.5
+    total_height = len(lines) * line_height
+    start_y = quote_y + (quote_height - total_height) / 2 + 3
 
-    # 绘制底部品牌
-    brand_y = 1280
-    if font_author:
-        # 背景圆
-        draw.ellipse(
-            [(width//2 - 50, brand_y), (width//2 + 50, brand_y + 100)],
-            fill='rgba(102, 126, 234, 0.1)',
-            outline='#667eea',
-            width=3
-        )
+    for i, line in enumerate(lines):
+        try:
+            ax.text(54, start_y + i * line_height, line,
+                   fontsize=52, color='#2D3436',
+                   ha='center', va='center',
+                   fontproperties=font_prop_bold, weight='bold')
+        except:
+            # 如果中文渲染失败，显示占位文本
+            if i == 0:
+                ax.text(54, start_y, "Deep Reading",
+                       fontsize=52, color='#2D3436',
+                       ha='center', va='center', weight='bold')
+            if i == 1:
+                ax.text(54, start_y + line_height, "Critical Thinking",
+                       fontsize=42, color='#636E72',
+                       ha='center', va='center')
 
-        # 品牌
-        brand_text = "DeepRead 深读"
-        brand_bbox = draw.textbbox((0, 0), brand_text, font=font_author)
-        brand_width = brand_bbox[2] - brand_bbox[0]
-        draw.text((width//2 - brand_width//2, brand_y + 20), brand_text, fill='#667eea', font=font_author)
+    # 绘制底部品牌区域
+    brand_y = 128
+
+    # 背景椭圆
+    ellipse = patches.Ellipse((54, brand_y + 6), 12, 12,
+                              facecolor='#F8F9FA',
+                              edgecolor='#667eea', linewidth=0.4)
+    ax.add_patch(ellipse)
+
+    # 品牌文本
+    try:
+        ax.text(54, brand_y + 3, "DeepRead 深读",
+               fontsize=40, color='#667eea',
+               ha='center', va='center',
+               fontproperties=font_prop, weight='bold')
 
         # 标语
-        if font_small:
-            tagline = "深度阅读 · 沉浸思考"
-            tagline_bbox = draw.textbbox((0, 0), tagline, font=font_small)
-            tagline_width = tagline_bbox[2] - tagline_bbox[0]
-            draw.text((width//2 - tagline_width//2, brand_y + 80), tagline, fill='#636E72', font=font_small)
+        ax.text(54, brand_y + 8.5, "深度阅读 · 沉浸思考",
+               fontsize=30, color='#636E72',
+               ha='center', va='center',
+               fontproperties=font_prop)
+    except:
+        ax.text(54, brand_y + 3, "DeepRead",
+               fontsize=40, color='#667eea',
+               ha='center', va='center', weight='bold')
+        ax.text(54, brand_y + 8.5, "Deep Reading",
+               fontsize=30, color='#636E72',
+               ha='center', va='center')
 
-    # 转换为字节
+    # 保存到BytesIO
     buf = BytesIO()
-    img.save(buf, format='PNG', quality=100)
+    plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0,
+                dpi=dpi, facecolor='white', edgecolor='none')
     buf.seek(0)
+    plt.close(fig)
+
     return buf.getvalue()
 
 
 def create_reading_poster_image(title, author, emoji, tags, quote, stats):
-    """生成阅读海报图片"""
-    # 图片尺寸
-    width = 600
-    padding = 50
+    """生成阅读海报图片 - 使用matplotlib（更好的中文支持）"""
+    # 配置中文字体
+    def get_chinese_font():
+        """获取中文字体路径"""
+        import platform
+        system = platform.system()
 
-    try:
-        font_title = ImageFont.truetype("msyhbd.ttc", 36)
-        font_author = ImageFont.truetype("msyh.ttc", 22)
-        font_tag = ImageFont.truetype("msyh.ttc", 14)
-        font_quote = ImageFont.truetype("msyh.ttc", 24)
-        font_number = ImageFont.truetype("msyhbd.ttc", 40)
-        font_label = ImageFont.truetype("msyh.ttc", 14)
-        font_small = ImageFont.truetype("msyh.ttc", 12)
-    except:
-        font_title = ImageFont.load_default()
-        font_author = ImageFont.load_default()
-        font_tag = ImageFont.load_default()
-        font_quote = ImageFont.load_default()
-        font_number = ImageFont.load_default()
-        font_label = ImageFont.load_default()
-        font_small = ImageFont.load_default()
+        font_paths = []
 
-    # 临时图片用于测量
-    temp_img = Image.new('RGB', (width, 100))
-    temp_draw = ImageDraw.Draw(temp_img)
+        if system == 'Linux':
+            font_paths = [
+                '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+                '/usr/share/fonts/truetype/arphic/uming.ttc',
+                '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+                '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+                '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
+            ]
+        elif system == 'Darwin':  # macOS
+            font_paths = [
+                '/System/Library/Fonts/PingFang.ttc',
+                '/System/Library/Fonts/STHeiti Light.ttc',
+                '/Library/Fonts/Arial Unicode.ttf',
+            ]
+        elif system == 'Windows':
+            font_paths = [
+                'C:/Windows/Fonts/msyh.ttc',
+                'C:/Windows/Fonts/msyhbd.ttc',
+                'C:/Windows/Fonts/simhei.ttf',
+                'C:/Windows/Fonts/simsun.ttc',
+            ]
 
-    # 计算高度
-    title_h = 50
-    emoji_h = 80
-    author_h = 30
-    tags_h = 30
-    quote_h = 100
-    stats_h = 180
+        for font_path in font_paths:
+            try:
+                import os
+                if os.path.exists(font_path):
+                    return font_path
+            except:
+                continue
 
-    total_height = padding + emoji_h + title_h + author_h + tags_h + padding + quote_h + padding + stats_h + padding
+        return None
 
-    # 创建图片
-    img = Image.new('RGB', (width, total_height), color='#FFFFFF')
-    draw = ImageDraw.Draw(img)
+    chinese_font_path = get_chinese_font()
+    if chinese_font_path:
+        font_prop = font_manager.FontProperties(fname=chinese_font_path)
+        font_prop_bold = font_manager.FontProperties(fname=chinese_font_path, weight='bold')
+        font_prop_small = font_manager.FontProperties(fname=chinese_font_path, size=10)
+    else:
+        font_prop = font_manager.FontProperties(family='sans-serif')
+        font_prop_bold = font_manager.FontProperties(family='sans-serif', weight='bold')
+        font_prop_small = font_manager.FontProperties(family='sans-serif', size=10)
 
-    # 绘制背景
-    draw.rectangle([(0, 0), (width, total_height)], fill='#FFFFFF')
+    # 计算高度（基于内容）
+    padding = 5
+    emoji_h = 8
+    title_h = 5
+    author_h = 3
+    tags_h = 4 if tags else 0
+    quote_h = 12
+    stats_h = 20
+    brand_h = 6
 
-    # 顶部区域
-    y = padding
+    total_height = padding + emoji_h + title_h + author_h + tags_h + padding + quote_h + padding + stats_h + padding + brand_h
+
+    # 创建图形（宽度60，高度根据内容）
+    fig, ax = plt.subplots(figsize=(6, total_height / 10), dpi=100)
+    ax.set_xlim(0, 60)
+    ax.set_ylim(0, total_height)
+    ax.axis('off')
+
+    # 绘制白色背景
+    ax.add_patch(patches.Rectangle((0, 0), 60, total_height, facecolor='white', edgecolor='none'))
+
+    y = total_height - padding
 
     # Emoji
-    draw.text((width//2 - 40, y), emoji, font=ImageFont.load_default())
-    y += emoji_h
+    try:
+        ax.text(30, y, emoji, fontsize=40, ha='center', va='top')
+    except:
+        ax.text(30, y, '📖', fontsize=40, ha='center', va='top')
+    y -= emoji_h
 
     # 标题
-    title_bbox = temp_draw.textbbox((0, 0), title, font=font_title)
-    title_w = title_bbox[2] - title_bbox[0]
-    draw.text(((width - title_w)//2, y), title, fill='#2D3436', font=font_title)
-    y += title_h
+    try:
+        ax.text(30, y, title, fontsize=32, color='#2D3436',
+               ha='center', va='top', fontproperties=font_prop_bold, weight='bold')
+    except:
+        ax.text(30, y, "Reading", fontsize=32, color='#2D3436',
+               ha='center', va='top', weight='bold')
+    y -= title_h
 
     # 作者
-    author_bbox = temp_draw.textbbox((0, 0), author, font=font_author)
-    author_w = author_bbox[2] - author_bbox[0]
-    draw.text(((width - author_w)//2, y), author, fill='#636E72', font=font_author)
-    y += author_h + 10
+    try:
+        ax.text(30, y, author, fontsize=18, color='#636E72',
+               ha='center', va='top', fontproperties=font_prop)
+    except:
+        ax.text(30, y, "By Author", fontsize=18, color='#636E72',
+               ha='center', va='top')
+    y -= author_h + 1
 
     # 标签
     if tags:
-        tag_x = padding
-        for tag in tags[:3]:  # 最多3个标签
-            tag_bbox = temp_draw.textbbox((0, 0), tag, font=font_tag)
-            tag_w = tag_bbox[2] - tag_bbox[0] + 20
-            if tag_x + tag_w > width - padding:
-                break
-            draw.rectangle([(tag_x, y), (tag_x + tag_w, y + 25)], fill='rgba(102, 126, 234, 0.1)', outline='#667eea')
-            draw.text((tag_x + 10, y + 3), tag, fill='#667eea', font=font_tag)
-            tag_x += tag_w + 10
-        y += tags_h + 20
+        tag_width = 12
+        tag_spacing = 1
+        total_tags_width = len(tags[:3]) * (tag_width + tag_spacing)
+
+        start_x = max(padding, (60 - total_tags_width) / 2)
+        current_x = start_x
+
+        for tag in tags[:3]:
+            # 标签背景
+            ax.add_patch(patches.Rectangle((current_x, y - 3), tag_width, 3.5,
+                                          facecolor='rgba(102, 126, 234, 0.1)',
+                                          edgecolor='#667eea', linewidth=0.15))
+            try:
+                ax.text(current_x + tag_width / 2, y - 1.5, tag,
+                       fontsize=11, color='#667eea',
+                       ha='center', va='center', fontproperties=font_prop)
+            except:
+                pass
+            current_x += tag_width + tag_spacing
+        y -= tags_h + 1
+
+    y -= padding
 
     # 金句区域
-    draw.rectangle([(padding, y), (width - padding, y + quote_h)], fill='#F8F9FA', outline='#667eea', width=4)
-    y += 15
+    quote_top = y
+    quote_bottom = y - quote_h
 
-    # 金句文本（简化处理，只显示前两行）
-    quote_lines = quote.split('\n')[:2]
-    for i, line in enumerate(quote_lines):
-        draw.text((padding + 15, y + i * 30), line, fill='#2D3436', font=font_quote)
+    ax.add_patch(patches.FancyBboxPatch((padding, quote_bottom), 60 - 2 * padding, quote_h,
+                                        boxstyle="round,pad=0.3",
+                                        facecolor='#F8F9FA',
+                                        edgecolor='#667eea', linewidth=0.3))
 
-    y += quote_h + padding
+    # 金句文本
+    quote_clean = quote.replace('\n', ' ').strip()
+
+    # 按字符数分行
+    lines = []
+    current_line = ""
+    for char in quote_clean:
+        if len(current_line) < 14:
+            current_line += char
+        else:
+            lines.append(current_line)
+            current_line = char
+    if current_line:
+        lines.append(current_line)
+
+    lines = lines[:3]  # 最多3行
+
+    line_height = 3.5
+    total_quote_height = len(lines) * line_height
+    quote_start_y = quote_top - (quote_h - total_quote_height) / 2 - 1
+
+    for i, line in enumerate(lines):
+        try:
+            ax.text(30, quote_start_y - i * line_height, line,
+                   fontsize=20, color='#2D3436',
+                   ha='center', va='top',
+                   fontproperties=font_prop_bold, weight='bold')
+        except:
+            if i == 0:
+                ax.text(30, quote_start_y, "Deep Reading",
+                       fontsize=20, color='#2D3436',
+                       ha='center', va='top', weight='bold')
+
+    y = quote_bottom - padding
 
     # 统计区域
     books_read = stats.get('books_read', 0)
     time_text = stats.get('time_display', '0分钟')
 
     # 已读书籍
-    draw.rectangle([(padding, y), (width - padding, y + 80)], fill='rgba(102, 126, 234, 0.05)', outline='#667eea')
-    draw.text((padding + 70, y + 15), str(books_read), fill='#667eea', font=font_number)
-    draw.text((padding + 70, y + 50), '已读书籍', fill='#636E72', font=font_label)
-    draw.text((padding + 15, y + 25), '📚', font=ImageFont.load_default())
+    stats_y_start = y
+    stats_height = 9
+
+    ax.add_patch(patches.Rectangle((padding, stats_y_start - stats_height), 60 - 2 * padding, stats_height,
+                                   facecolor='rgba(102, 126, 234, 0.05)',
+                                   edgecolor='#667eea', linewidth=0.2))
+
+    # Emoji图标
+    ax.text(padding + 2, stats_y_start - 3, '📚', fontsize=18, va='center')
+
+    # 数字
+    try:
+        ax.text(padding + 9, stats_y_start - 3, str(books_read),
+               fontsize=32, color='#667eea',
+               ha='center', va='center', weight='bold')
+    except:
+        pass
+
+    # 标签
+    try:
+        ax.text(padding + 9, stats_y_start - 6, '已读书籍',
+               fontsize=12, color='#636E72',
+               ha='center', va='center', fontproperties=font_prop_small)
+    except:
+        ax.text(padding + 9, stats_y_start - 6, 'Books Read',
+               fontsize=12, color='#636E72',
+               ha='center', va='center')
 
     # 阅读时长
-    y += 90
-    draw.rectangle([(padding, y), (width - padding, y + 80)], fill='rgba(118, 75, 162, 0.05)', outline='#764ba2')
-    draw.text((padding + 70, y + 15), time_text, fill='#764ba2', font=font_number)
-    draw.text((padding + 70, y + 50), '阅读时长', fill='#636E72', font=font_label)
-    draw.text((padding + 15, y + 25), '⏱️', font=ImageFont.load_default())
+    y = stats_y_start - stats_height - 1.5
+
+    ax.add_patch(patches.Rectangle((padding, y - stats_height), 60 - 2 * padding, stats_height,
+                                   facecolor='rgba(118, 75, 162, 0.05)',
+                                   edgecolor='#764ba2', linewidth=0.2))
+
+    ax.text(padding + 2, y - 3, '⏱️', fontsize=18, va='center')
+
+    try:
+        ax.text(padding + 9, y - 3, time_text,
+               fontsize=32, color='#764ba2',
+               ha='center', va='center', weight='bold')
+    except:
+        pass
+
+    try:
+        ax.text(padding + 9, y - 6, '阅读时长',
+               fontsize=12, color='#636E72',
+               ha='center', va='center', fontproperties=font_prop_small)
+    except:
+        ax.text(padding + 9, y - 6, 'Time Spent',
+               fontsize=12, color='#636E72',
+               ha='center', va='center')
 
     # 底部品牌
-    y = total_height - 40
-    brand_text = "DeepRead 深读"
-    brand_bbox = temp_draw.textbbox((0, 0), brand_text, font=font_author)
-    brand_w = brand_bbox[2] - brand_bbox[0]
-    draw.text(((width - brand_w)//2, y), brand_text, fill='#667eea', font=font_author)
+    brand_y = y - stats_height - 2
 
-    tagline = "深度阅读 · 沉浸思考"
-    tagline_bbox = temp_draw.textbbox((0, 0), tagline, font=font_small)
-    tagline_w = tagline_bbox[2] - tagline_bbox[0]
-    draw.text(((width - tagline_w)//2, y + 25), tagline, fill='#636E72', font=font_small)
+    try:
+        ax.text(30, brand_y, "DeepRead 深读",
+               fontsize=18, color='#667eea',
+               ha='center', va='center',
+               fontproperties=font_prop_bold, weight='bold')
 
-    # 转换为字节
+        ax.text(30, brand_y - 2, "深度阅读 · 沉浸思考",
+               fontsize=11, color='#636E72',
+               ha='center', va='center',
+               fontproperties=font_prop_small)
+    except:
+        ax.text(30, brand_y, "DeepRead",
+               fontsize=18, color='#667eea',
+               ha='center', va='center', weight='bold')
+        ax.text(30, brand_y - 2, "Deep Reading",
+               fontsize=11, color='#636E72',
+               ha='center', va='center')
+
+    # 保存到BytesIO
     buf = BytesIO()
-    img.save(buf, format='PNG', quality=95)
+    plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.2,
+                dpi=100, facecolor='white', edgecolor='none')
     buf.seek(0)
+    plt.close(fig)
+
     return buf.getvalue()
 
 
