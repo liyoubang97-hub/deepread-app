@@ -1147,58 +1147,58 @@ def render_library():
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ========== 标签筛选 ==========
-    st.markdown('<div class="section-block">', unsafe_allow_html=True)
-    st.markdown('<div style="display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 1rem;"><span style="font-size: 1.1rem; font-weight: 600;">🏷️ 按主题浏览</span><span style="font-size: 0.75rem; color: #636E72; font-weight: 400;">点击选择主题，可多选</span></div>', unsafe_allow_html=True)
+    # ========== 标签筛选（折叠） ==========
+    with st.expander("🏷️ 按主题筛选（点击展开）", expanded=False):
+        st.markdown('<div style="display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 1rem;"><span style="font-size: 0.9rem; color: #636E72;">点击选择主题，可多选</span></div>', unsafe_allow_html=True)
 
-    # 收集所有标签
-    all_tags = set()
-    for book in BOOKS_DATA:
-        all_tags.update(book['tags'])
+        # 收集所有标签
+        all_tags = set()
+        for book in BOOKS_DATA:
+            all_tags.update(book['tags'])
 
-    # 标签按钮（横向排列，每行最多4个）
-    tags_list = sorted(all_tags)
-    num_rows = (len(tags_list) + 3) // 4  # 每行4个标签
+        # 标签按钮（横向排列，每行最多4个）
+        tags_list = sorted(all_tags)
+        num_rows = (len(tags_list) + 3) // 4  # 每行4个标签
 
-    # 存储选中的标签
-    if 'selected_tags' not in st.session_state:
-        st.session_state.selected_tags = []
-
-    # "全部"按钮和标签筛选状态显示
-    col_clear, col_status = st.columns([1, 3])
-    with col_clear:
-        if st.button("📚 全部清除", key="tag_clear_all", use_container_width=True):
+        # 存储选中的标签
+        if 'selected_tags' not in st.session_state:
             st.session_state.selected_tags = []
-            st.rerun()
 
-    with col_status:
-        if st.session_state.selected_tags:
-            st.markdown(f'<div style="padding: 0.5rem; background: linear-gradient(145deg, #e8eef2 0%, #dfe6ed 100%); border-radius: 12px; text-align: center; color: #2D3436; font-size: 0.85rem; font-weight: 500;">已选: {", ".join(st.session_state.selected_tags)}</div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div style="padding: 0.5rem; background: #F0F3F5; border-radius: 12px; text-align: center; color: #636E72; font-size: 0.85rem;">未选择任何主题</div>', unsafe_allow_html=True)
+        # "全部"按钮和标签筛选状态显示
+        col_clear, col_status = st.columns([1, 3])
+        with col_clear:
+            if st.button("📚 全部清除", key="tag_clear_all", use_container_width=True):
+                st.session_state.selected_tags = []
+                st.rerun()
 
-    st.markdown('<br>', unsafe_allow_html=True)
+        with col_status:
+            if st.session_state.selected_tags:
+                st.markdown(f'<div style="padding: 0.5rem; background: linear-gradient(145deg, #e8eef2 0%, #dfe6ed 100%); border-radius: 12px; text-align: center; color: #2D3436; font-size: 0.85rem; font-weight: 500;">已选: {", ".join(st.session_state.selected_tags)}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div style="padding: 0.5rem; background: #F0F3F5; border-radius: 12px; text-align: center; color: #636E72; font-size: 0.85rem;">未选择任何主题</div>', unsafe_allow_html=True)
 
-    # 标签按钮（4列网格）
-    for row in range(num_rows):
-        tag_cols = st.columns(4)
-        for col in range(4):
-            tag_idx = row * 4 + col
-            if tag_idx < len(tags_list):
-                tag = tags_list[tag_idx]
-                with tag_cols[col]:
-                    is_selected = tag in st.session_state.selected_tags
-                    if is_selected:
-                        st.markdown(f"""
+        st.markdown('<br>', unsafe_allow_html=True)
+
+        # 标签按钮（4列网格）
+        for row in range(num_rows):
+            tag_cols = st.columns(4)
+            for col in range(4):
+                tag_idx = row * 4 + col
+                if tag_idx < len(tags_list):
+                    tag = tags_list[tag_idx]
+                    with tag_cols[col]:
+                        is_selected = tag in st.session_state.selected_tags
+                        if is_selected:
+                            st.markdown(f"""
 <div style="padding: 0.5rem; background: linear-gradient(145deg, #667eea 0%, #764ba2 100%); border-radius: 12px; text-align: center; color: #ffffff; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 2px solid rgba(102, 126, 234, 0.3);">
     ✓ {tag}
 </div>
 """, unsafe_allow_html=True)
-                        if st.button(f"取消 {tag}", key=f"tag_{tag}_off", use_container_width=True):
-                            st.session_state.selected_tags.remove(tag)
-                            st.rerun()
-                    else:
-                        st.markdown(f"""
+                            if st.button(f"取消 {tag}", key=f"tag_{tag}_off", use_container_width=True):
+                                st.session_state.selected_tags.remove(tag)
+                                st.rerun()
+                        else:
+                            st.markdown(f"""
 <div style="padding: 0.5rem; background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%); border-radius: 12px; text-align: center; color: #2D3436; font-size: 0.8rem; font-weight: 500; cursor: pointer; border: 1px solid rgba(102, 126, 234, 0.1);">
     {tag}
 </div>
