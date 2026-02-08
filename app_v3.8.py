@@ -579,15 +579,8 @@ def create_quote_card_image(title, author, quote):
     # 绘制白色背景
     ax.add_patch(patches.Rectangle((0, 0), 108, 144, facecolor='white', edgecolor='none'))
 
-    # 绘制顶部紫色渐变条
-    for y in range(10):
-        alpha = 1 - y / 10
-        ax.add_patch(patches.Rectangle((0, y), 108, 1, facecolor='#667eea', alpha=alpha))
-
-    # 绘制柔和的渐变背景（顶部区域）
-    for y in range(10, 22):
-        color_val = 1 - (y - 10) * 0.05
-        ax.add_patch(patches.Rectangle((0, y), 108, 1, facecolor=(color_val, color_val, min(1, color_val + 0.08))))
+    # 绘制顶部紫色纯色条
+    ax.add_patch(patches.Rectangle((0, 130), 108, 10, facecolor='#667eea', edgecolor='none'))
 
     # 绘制标题（缩小字体，优化位置）
     if chinese_available:
@@ -654,28 +647,29 @@ def create_quote_card_image(title, author, quote):
                ha='center', va='center')
 
     # 绘制底部品牌区域
-    brand_y = 12
+    brand_y = 10
+    brand_height = 8
 
-    # 背景椭圆
-    ellipse = patches.Ellipse((54, brand_y + 4), 10, 8,
-                              facecolor='#F8F9FA',
-                              edgecolor='#667eea', linewidth=0.4)
-    ax.add_patch(ellipse)
+    # 纯色背景矩形
+    ax.add_patch(patches.Rectangle((34, brand_y), 40, brand_height,
+                                   facecolor='#F8F9FA',
+                                   edgecolor='#667eea',
+                                   linewidth=0.3))
 
-    # 品牌文本（缩小字体）
+    # 品牌文本（统一字体大小，避免重叠）
     if chinese_available:
-        ax.text(54, brand_y + 4, "DeepRead 深读",
-               fontsize=28, color='#667eea',
+        ax.text(54, brand_y + 5.5, "DeepRead 深读",
+               fontsize=22, color='#667eea',
                ha='center', va='center', weight='bold')
-        ax.text(54, brand_y + 1.5, "深度阅读 · 沉浸思考",
-               fontsize=18, color='#636E72',
+        ax.text(54, brand_y + 2.5, "深度阅读 · 沉浸思考",
+               fontsize=14, color='#636E72',
                ha='center', va='center')
     else:
-        ax.text(54, brand_y + 4, "DeepRead",
-               fontsize=28, color='#667eea',
+        ax.text(54, brand_y + 5.5, "DeepRead",
+               fontsize=22, color='#667eea',
                ha='center', va='center', weight='bold')
-        ax.text(54, brand_y + 1.5, "Deep Reading",
-               fontsize=18, color='#636E72',
+        ax.text(54, brand_y + 2.5, "Deep Reading",
+               fontsize=14, color='#636E72',
                ha='center', va='center')
 
     # 保存到BytesIO
@@ -881,21 +875,21 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
                ha='center', va='center')
 
     # 底部品牌
-    brand_y = y - stats_height - 2
+    brand_y = y - stats_height - 1
 
     if chinese_available:
         ax.text(30, brand_y, "DeepRead 深读",
-               fontsize=18, color='#667eea',
+               fontsize=14, color='#667eea',
                ha='center', va='center', weight='bold')
-        ax.text(30, brand_y - 2, "深度阅读 · 沉浸思考",
-               fontsize=11, color='#636E72',
+        ax.text(30, brand_y - 1.8, "深度阅读 · 沉浸思考",
+               fontsize=10, color='#636E72',
                ha='center', va='center')
     else:
         ax.text(30, brand_y, "DeepRead",
-               fontsize=18, color='#667eea',
+               fontsize=14, color='#667eea',
                ha='center', va='center', weight='bold')
-        ax.text(30, brand_y - 2, "Deep Reading",
-               fontsize=11, color='#636E72',
+        ax.text(30, brand_y - 1.8, "Deep Reading",
+               fontsize=10, color='#636E72',
                ha='center', va='center')
 
     # 保存到BytesIO
