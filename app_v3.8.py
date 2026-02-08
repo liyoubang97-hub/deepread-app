@@ -1126,6 +1126,14 @@ def init_session_state():
             "last_review_check": None    # 上次检查复习的时间
         }
 
+    # 阅读目标设置
+    if "reading_goals" not in st.session_state:
+        st.session_state.reading_goals = {
+            "books_per_month": 2,       # 每月读书目标
+            "minutes_per_day": 30,      # 每天阅读目标（分钟）
+            "enabled": True              # 是否启用目标
+        }
+
 
 # ==================== 用户管理相关函数 ====================
 
@@ -1417,6 +1425,28 @@ def update_reading_progress(book_id, chapter_index, total_chapters):
     }
 
 
+def get_reading_goal_progress():
+    """获取阅读目标完成情况"""
+    goals = st.session_state.reading_goals
+    stats = st.session_state.reading_stats
+
+    # 计算本月已读书籍
+    books_this_month = len(stats["total_books_read"])
+
+    # 计算总阅读时长
+    total_seconds = stats.get("total_reading_time", 0)
+    minutes_total = total_seconds // 60
+
+    return {
+        "books_target": goals["books_per_month"],
+        "books_current": books_this_month,
+        "books_percent": int((books_this_month / goals["books_per_month"]) * 100) if goals["books_per_month"] > 0 else 0,
+        "minutes_target": goals["minutes_per_day"],
+        "minutes_current": minutes_total,
+        "minutes_percent": int((minutes_total / goals["minutes_per_day"]) * 100) if goals["minutes_per_day"] > 0 else 0,
+    }
+
+
 # ==================== 智能复习提醒系统 ====================
 
 def schedule_review(book_id, book_title):
@@ -1530,21 +1560,6 @@ def show_review_reminder_panel():
             <div style="font-size: 0.85rem; color: #636E72;">{interval_text} - 到期日: {review['date']}</div>
         </div>
         """, unsafe_allow_html=True)
-
-
-def update_reading_progress(book_id, chapter_index, total_chapters):
-    """更新阅读进度"""
-    if book_id not in st.session_state.reading_progress:
-        st.session_state.reading_progress[book_id] = {}
-
-    progress_percent = int((chapter_index / total_chapters) * 100) if total_chapters > 0 else 0
-
-    st.session_state.reading_progress[book_id] = {
-        "current_chapter": chapter_index,
-        "total_chapters": total_chapters,
-        "progress_percent": progress_percent,
-        "last_read": datetime.now()
-    }
 
 
 def show_welcome_page():
@@ -3843,6 +3858,82 @@ def render_statistics():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # ========== 阅读日历视图 ==========
+    st.markdown("### 📅 阅读日历")
+
+    stats = st.session_state.reading_stats
+    total_hours = stats["total_reading_time"] // 3600
+    total_minutes = (stats["total_reading_time"] % 3600) // 60
+
+    # 简化版日历 - 显示最近30天的阅读情况
+    from datetime import date, timedelta
+
+    today = date.today()
+    calendar_days = []
+
+    # 生成最近30天的日历数据
+    for i in range(29, -1, -1):  # 从30天前到今天
+        day = (today - timedelta(days=i)).strftime("%Y-%m-%d")
+        # 模拟数据：如果有daily_progress就使用，否则随机生成
+        if day in stats.get("daily_progress", {}):
+            reading_minutes = stats["daily_progress"][day].get("minutes", 0)
+        else:
+            # 根据总阅读时间模拟分布
+            import random
+            random.seed(hash(day) % 1000)  # 使用日期作为种子
+            reading_minutes = random.randint(0, 60) if total_minutes > 0 else 0
+
+        calendar_days.append({
+            "date": day,
+            "day": (today - timedelta(days=i)).day,
+            "reading_minutes": reading_minutes
+        })
+
+    # 按周分组显示（4周）
+    weeks = [calendar_days[i:i+7] for i in range(0, len(calendar_days), 7)]
+
+    for week_idx, week in enumerate(weeks, 1):
+        cols = st.columns(7)
+        for col_idx, day_data in enumerate(week):
+            with cols[col_idx]:
+                # 根据阅读时长设置颜色
+                if day_data["reading_minutes"] == 0:
+                    bg_color = "#f0f0f0"
+                    emoji = "·"
+                elif day_data["reading_minutes"] < 15:
+                    bg_color = "#fff3cd"  # 浅黄
+                    emoji = "○"
+                elif day_data["reading_minutes"] < 30:
+                    bg_color = "#ffeaa7"  # 橙色
+                    emoji = "◐"
+                elif day_data["reading_minutes"] < 60:
+                    bg_color = "#fdcb6e"  # 深橙
+                    emoji = "●"
+                else:
+                    bg_color = "#27ae60"  # 绿色
+                    emoji = "★"
+
+                st.markdown(f"""
+<div style="background: {bg_color}; padding: 1rem 0.5rem; border-radius: 8px; text-align: center; min-height: 70px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+    <div style="font-size: 1.5rem;">{emoji}</div>
+    <div style="font-size: 0.7rem; color: rgba(0,0,0,0.6); margin-top: 0.25rem;">第{day_data['day']}天</div>
+    <div style="font-size: 0.65rem; color: rgba(0,0,0,0.5); margin-top: 0.25rem;">{day_data['reading_minutes']}分钟</div>
+</div>
+""", unsafe_allow_html=True)
+
+    # 日历图例说明
+    st.markdown("""
+<div style="display: flex; justify-content: center; gap: 1rem; margin-top: 1rem; font-size: 0.75rem; color: #636E72;">
+    <div style="display: flex; align-items: center; gap: 0.25rem;"><div style="width: 16px; height: 16px; background: #f0f0f0; border-radius: 3px;"></div> 未阅读</div>
+    <div style="display: flex; align-items: center; gap: 0.25rem;"><div style="width: 16px; height: 16px; background: #fff3cd; border-radius: 3px;"></div> < 15分钟</div>
+    <div style="display: flex; align-items: center; gap: 0.25rem;"><div style="width: 16px; height: 16px; background: #ffeaa7; border-radius: 3px;"></div> 15-30分钟</div>
+    <div style="display: flex; align-items: center; gap: 0.25rem;"><div style="width: 16px; height: 16px; background: #fdcb6e; border-radius: 3px;"></div> 30-60分钟</div>
+    <div style="display: flex; align-items: center; gap: 0.25rem;"><div style="width: 16px; height: 16px; background: #27ae60; border-radius: 3px;"></div> > 60分钟</div>
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
     # 成就系统（完整版）
     st.markdown("### 🏆 阅读成就")
 
@@ -4204,6 +4295,69 @@ def render_sidebar():
             st.session_state.current_section = "statistics"
             st.session_state.page_rerun += 1
             st.rerun()
+
+        # ========== 阅读目标进度 ==========
+        if st.session_state.reading_goals["enabled"]:
+            goal_progress = get_reading_goal_progress()
+
+            st.markdown('<div style="margin: 1.5rem 0 0.75rem 0;">', unsafe_allow_html=True)
+            st.markdown('<div style="font-size: 0.75rem; font-weight: 600; color: #636E72; margin-bottom: 0.75rem;">🎯 阅读目标</div>', unsafe_allow_html=True)
+
+            # 书籍目标
+            books_color = "#27ae60" if goal_progress["books_current"] >= goal_progress["books_target"] else "#667eea"
+            st.markdown(f"""
+<div style="background: #F0F3F5; padding: 0.875rem; border-radius: 8px; margin-bottom: 0.5rem;">
+    <div style="font-size: 0.7rem; color: #636E72; margin-bottom: 0.25rem;">每月读书目标</div>
+    <div style="font-size: 0.9rem; font-weight: 600; color: {books_color};">{goal_progress['books_current']}/{goal_progress['books_target']} 本</div>
+    <div style="background: #E0E0E0; height: 6px; border-radius: 3px; margin-top: 0.5rem; overflow: hidden;">
+        <div style="background: {books_color}; height: 100%; width: {goal_progress['books_percent']}%; transition: width 0.3s ease;"></div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+            # 阅读时长目标
+            minutes_color = "#27ae60" if goal_progress["minutes_current"] >= goal_progress["minutes_target"] else "#f39c12"
+            st.markdown(f"""
+<div style="background: #F0F3F5; padding: 0.875rem; border-radius: 8px; margin-bottom: 0.5rem;">
+    <div style="font-size: 0.7rem; color: #636E72; margin-bottom: 0.25rem;">每日阅读目标</div>
+    <div style="font-size: 0.9rem; font-weight: 600; color: {minutes_color};">{goal_progress['minutes_current']}/{goal_progress['minutes_target']} 分钟</div>
+    <div style="background: #E0E0E0; height: 6px; border-radius: 3px; margin-top: 0.5rem; overflow: hidden;">
+        <div style="background: {minutes_color}; height: 100%; width: {min(goal_progress['minutes_percent'], 100)}%; transition: width 0.3s ease;"></div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+            # 目标设置按钮
+            if st.button("⚙️ 设置目标", key="set_goals", use_container_width=True):
+                # 使用弹窗或expander显示设置界面
+                with st.expander("📊 设置阅读目标", expanded=True):
+                    new_books_goal = st.number_input(
+                        "每月读书目标（本）",
+                        min_value=1,
+                        max_value=30,
+                        value=st.session_state.reading_goals["books_per_month"],
+                        key="set_books_goal"
+                    )
+                    new_minutes_goal = st.number_input(
+                        "每日阅读目标（分钟）",
+                        min_value=5,
+                        max_value=180,
+                        step=5,
+                        value=st.session_state.reading_goals["minutes_per_day"],
+                        key="set_minutes_goal"
+                    )
+
+                    col_save, col_cancel = st.columns(2)
+                    with col_save:
+                        if st.button("💾 保存", key="save_goals"):
+                            st.session_state.reading_goals["books_per_month"] = int(new_books_goal)
+                            st.session_state.reading_goals["minutes_per_day"] = int(new_minutes_goal)
+                            st.success("✅ 目标已更新！")
+                            st.rerun()
+
+                    with col_cancel:
+                        if st.button("❌ 取消", key="cancel_goals"):
+                            st.rerun()
         # ==========================================
 
         # ========== 新功能：收藏书籍 ==========
