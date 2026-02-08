@@ -511,10 +511,6 @@ CLOUD_SYNC_SERVER = os.getenv("CLOUD_SYNC_SERVER", "http://localhost:8000")
 def auto_sync_to_cloud():
     """自动同步数据到云端服务器"""
     try:
-        # 检查是否启用了云端同步
-        if not st.session_state.get("cloud_sync_enabled", False):
-            return False
-
         # 检查是否有用户token
         cloud_token = st.session_state.get("cloud_sync_token")
         if not cloud_token:
@@ -549,7 +545,7 @@ def auto_sync_to_cloud():
         return False
 
     except Exception as e:
-        # 静默失败，不影响用户体验
+        # 记录错误但不中断
         print(f"云端同步失败: {e}")
         return False
 
@@ -557,10 +553,6 @@ def auto_sync_to_cloud():
 def auto_sync_from_cloud():
     """自动从云端服务器拉取数据"""
     try:
-        # 检查是否启用了云端同步
-        if not st.session_state.get("cloud_sync_enabled", False):
-            return False
-
         # 检查是否有用户token
         cloud_token = st.session_state.get("cloud_sync_token")
         if not cloud_token:
