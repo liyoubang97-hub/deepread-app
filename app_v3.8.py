@@ -3112,6 +3112,315 @@ def render_reflection(content):
     st.markdown('</div>', unsafe_allow_html=True)
 
 
+def render_statistics():
+    """显示详细统计页面"""
+    st.markdown("---")
+    st.markdown('<div class="section-title">📊 阅读数据统计</div>', unsafe_allow_html=True)
+
+    # 试用状态卡片
+    if st.session_state.user_tier == "trial":
+        days_remaining = get_trial_days_remaining()
+        if days_remaining > 0:
+            st.info(f"🎁 **7天深度版免费试用中** - 还剩 {days_remaining} 天，升级后解锁更多功能")
+        else:
+            st.warning("⏰ **试用已到期** - 升级深度版继续使用数据统计功能")
+
+    # 核心统计数据
+    stats = st.session_state.reading_stats
+
+    # 统计卡片（3列）
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        books_read_count = len(stats["total_books_read"])
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    padding: 1.5rem; border-radius: 12px; text-align: center; color: white;">
+            <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 0.5rem;">已读书籍</div>
+            <div style="font-size: 2.5rem; font-weight: 700;">{books_read_count}</div>
+            <div style="font-size: 0.75rem; opacity: 0.8; margin-top: 0.5rem;">本</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        total_hours = stats["total_reading_time"] // 3600
+        total_minutes = (stats["total_reading_time"] % 3600) // 60
+
+        if total_hours > 0:
+            time_display = f"{total_hours}h {total_minutes}m"
+        elif total_minutes > 0:
+            time_display = f"{total_minutes}m"
+        else:
+            time_display = "0m"
+
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                    padding: 1.5rem; border-radius: 12px; text-align: center; color: white;">
+            <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 0.5rem;">阅读时长</div>
+            <div style="font-size: 2.5rem; font-weight: 700;">{time_display}</div>
+            <div style="font-size: 0.75rem; opacity: 0.8; margin-top: 0.5rem;">总计</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        # 连续签到天数（这里用读书天数代替）
+        reading_days = len(stats["daily_progress"])
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+                    padding: 1.5rem; border-radius: 12px; text-align: center; color: white;">
+            <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 0.5rem;">活跃天数</div>
+            <div style="font-size: 2.5rem; font-weight: 700;">{reading_days}</div>
+            <div style="font-size: 0.75rem; opacity: 0.8; margin-top: 0.5rem;">天</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 已读书籍列表
+    if stats["total_books_read"]:
+        st.markdown("### 📚 已完成阅读")
+
+        for book_id in stats["total_books_read"]:
+            book = next((b for b in st.session_state.books if b["id"] == book_id), None)
+            if book:
+                with st.expander(f"📖 {book['title']}"):
+                    # 获取该书的阅读时间
+                    book_time = stats.get("book_reading_time", {}).get(book_id, 0)
+                    book_hours = book_time // 3600
+                    book_minutes = (book_time % 3600) // 60
+
+                    if book_hours > 0:
+                        time_str = f"{book_hours}小时{book_minutes}分钟"
+                    else:
+                        time_str = f"{book_minutes}分钟"
+
+                    st.markdown(f"**阅读时长：** {time_str}")
+                    st.markdown(f"**完成时间：** {stats.get('book_completion_date', {}).get(book_id, '未知')}")
+
+                    # 显示该书的所有实践记录
+                    if st.session_state.practices.get(book_id):
+                        st.markdown("**实践记录：**")
+                        for idx, practice in enumerate(st.session_state.practices[book_id], 1):
+                            st.markdown(f"{idx}. {practice.get('action', '')[:50]}...")
+    else:
+        st.info("📚 还没有完成阅读的书籍，继续加油！")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 成就系统（仅展示）
+    st.markdown("### 🏆 阅读成就")
+
+    achievement_col1, achievement_col2, achievement_col3 = st.columns(3)
+
+    # 成就1：初学者
+    with achievement_col1:
+        is_unlocked = books_read_count >= 1
+        st.markdown(f"""
+        <div style="background: {'#ffeaa7' if is_unlocked else '#f0f0f0'};
+                    padding: 1.5rem; border-radius: 12px; text-align: center;
+                    border: 3px solid {'#fdcb6e' if is_unlocked else '#ccc'};">
+            <div style="font-size: 3rem; margin-bottom: 0.5rem;">{'🌱' if is_unlocked else '🔒'}</div>
+            <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">
+                阅读萌芽
+            </div>
+            <div style="font-size: 0.75rem; color: #636E72;">
+                完成第1本书
+            </div>
+            <div style="font-size: 0.7rem; margin-top: 0.5rem;
+                        color: {'#27ae60' if is_unlocked else '#999'};">
+                {'✓ 已解锁' if is_unlocked else f'{books_read_count}/1'}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 成就2：阅读者
+    with achievement_col2:
+        is_unlocked = books_read_count >= 5
+        st.markdown(f"""
+        <div style="background: {'#74b9ff' if is_unlocked else '#f0f0f0'};
+                    padding: 1.5rem; border-radius: 12px; text-align: center;
+                    border: 3px solid {'#0984e3' if is_unlocked else '#ccc'};">
+            <div style="font-size: 3rem; margin-bottom: 0.5rem;">{'📚' if is_unlocked else '🔒'}</div>
+            <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">
+                阅读爱好者
+            </div>
+            <div style="font-size: 0.75rem; color: #636E72;">
+                完成5本书
+            </div>
+            <div style="font-size: 0.7rem; margin-top: 0.5rem;
+                        color: {'#27ae60' if is_unlocked else '#999'};">
+                {'✓ 已解锁' if is_unlocked else f'{books_read_count}/5'}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 成就3：深度阅读者
+    with achievement_col3:
+        is_unlocked = books_read_count >= 10
+        st.markdown(f"""
+        <div style="background: {'#fd79a8' if is_unlocked else '#f0f0f0'};
+                    padding: 1.5rem; border-radius: 12px; text-align: center;
+                    border: 3px solid {'#e84393' if is_unlocked else '#ccc'};">
+            <div style="font-size: 3rem; margin-bottom: 0.5rem;">{'👑' if is_unlocked else '🔒'}</div>
+            <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">
+                深度阅读者
+            </div>
+            <div style="font-size: 0.75rem; color: #636E72;">
+                完成10本书
+            </div>
+            <div style="font-size: 0.7rem; margin-top: 0.5rem;
+                        color: {'#27ae60' if is_unlocked else '#999'};">
+                {'✓ 已解锁' if is_unlocked else f'{books_read_count}/10'}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 功能对比表（仅在免费版显示）
+    if st.session_state.user_tier != "premium":
+        st.markdown("### ✨ 功能对比")
+
+        st.markdown("""
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+                <thead>
+                    <tr style="background: #f0f0f0;">
+                        <th style="padding: 0.75rem; text-align: left; border: 1px solid #ddd;">功能</th>
+                        <th style="padding: 0.75rem; text-align: center; border: 1px solid #ddd;">免费版</th>
+                        <th style="padding: 0.75rem; text-align: center; border: 1px solid #ddd; background: #e3f2fd;">深度版</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="padding: 0.75rem; border: 1px solid #ddd;">📖 完整阅读内容</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd;">✅</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd; background: #e3f2fd;">✅</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0.75rem; border: 1px solid #ddd;">✍️ 基础实践笔记</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd;">✅</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd; background: #e3f2fd;">✅</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0.75rem; border: 1px solid #ddd;">💾 本地数据存储</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd;">✅</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd; background: #e3f2fd;">✅</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0.75rem; border: 1px solid #ddd;">📊 阅读数据统计</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd;">7天</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd; background: #e3f2fd;">✅ 永久</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0.75rem; border: 1px solid #ddd;">☁️ 云端数据同步</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd;">❌</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd; background: #e3f2fd;">✅</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0.75rem; border: 1px solid #ddd;">🧠 智能复习提醒</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd;">❌</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd; background: #e3f2fd;">✅</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0.75rem; border: 1px solid #ddd;">📤 高级导出功能</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd;">❌</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd; background: #e3f2fd;">✅</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0.75rem; border: 1px solid #ddd;">🤖 AI智能推荐</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd;">❌</td>
+                        <td style="padding: 0.75rem; text-align: center; border: 1px solid #ddd; background: #e3f2fd;">✅</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # 价格方案
+        st.markdown("### 💎 选择适合你的方案")
+
+        pricing_col1, pricing_col2, pricing_col3 = st.columns(3)
+
+        with pricing_col1:
+            st.markdown("""
+            <div style="background: white; padding: 1.5rem; border-radius: 12px;
+                        border: 2px solid #ddd; text-align: center; height: 100%;">
+                <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem; color: #636E72;">
+                    月付
+                </div>
+                <div style="font-size: 2rem; font-weight: 700; color: #2D3436; margin-bottom: 0.5rem;">
+                    ¥9.9
+                </div>
+                <div style="font-size: 0.75rem; color: #636E72; margin-bottom: 1rem;">
+                    /月
+                </div>
+                <div style="font-size: 0.7rem; color: #999;">灵活订阅</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with pricing_col2:
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        padding: 1.5rem; border-radius: 12px; text-align: center;
+                        color: white; height: 100%; position: relative;">
+                <div style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+                            background: #fdcb6e; color: #2D3436; padding: 0.25rem 0.75rem;
+                            border-radius: 10px; font-size: 0.7rem; font-weight: 600;">
+                    推荐
+                </div>
+                <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem; opacity: 0.9;">
+                    季付
+                </div>
+                <div style="font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem;">
+                    ¥19.9
+                </div>
+                <div style="font-size: 0.75rem; opacity: 0.8; margin-bottom: 1rem;">
+                    /季
+                </div>
+                <div style="font-size: 0.7rem; opacity: 0.9;">省 ¥9.8</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with pricing_col3:
+            st.markdown("""
+            <div style="background: white; padding: 1.5rem; border-radius: 12px;
+                        border: 2px solid #ddd; text-align: center; height: 100%;">
+                <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem; color: #636E72;">
+                    年付
+                </div>
+                <div style="font-size: 2rem; font-weight: 700; color: #2D3436; margin-bottom: 0.5rem;">
+                    ¥59.9
+                </div>
+                <div style="font-size: 0.75rem; color: #636E72; margin-bottom: 1rem;">
+                    /年
+                </div>
+                <div style="font-size: 0.7rem; color: #27ae60;">省 ¥58.9</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # 升级按钮
+        st.markdown("<div style='text-align: center; margin: 2rem 0;'>", unsafe_allow_html=True)
+        if st.button("✨ 升级到深度版", use_container_width=True, key="upgrade_premium"):
+            st.info("💡 升级功能即将开放，敬请期待！")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # 返回按钮
+    st.markdown("<br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col2:
+        if st.button("📚 返回书库", use_container_width=True, key="stats_back_to_library"):
+            st.session_state.page_rerun += 1
+            st.session_state.current_book = None
+            st.session_state.current_section = "library"
+            st.rerun()
+
+
 def render_sidebar():
     """侧边栏 - 简化版（大号emoji）"""
     with st.sidebar:
@@ -3153,6 +3462,12 @@ def render_sidebar():
     <div style="font-size: 0.9rem; font-weight: 600; color: #2D3436;">⏱️ {time_display}</div>
 </div>
 """, unsafe_allow_html=True)
+
+        # 详细统计按钮
+        if st.button("📊 详细统计", key="nav_statistics", use_container_width=True):
+            st.session_state.current_section = "statistics"
+            st.session_state.page_rerun += 1
+            st.rerun()
         # ==========================================
 
         # ========== 新功能：收藏书籍 ==========
@@ -3299,7 +3614,9 @@ def main():
         content = st.session_state.current_content
         section = st.session_state.current_section
 
-        if section == "intro":
+        if section == "statistics":
+            render_statistics()
+        elif section == "intro":
             render_introduction(content)
         elif section == "insights":
             render_insights(content)
