@@ -582,24 +582,8 @@ def create_quote_card_image(title, author, quote):
     # 绘制顶部紫色纯色条
     ax.add_patch(patches.Rectangle((0, 130), 108, 10, facecolor='#667eea', edgecolor='none'))
 
-    # 绘制标题（在顶部和底部logo的中间）
-    if chinese_available:
-        ax.text(54, 72, title, fontsize=26, color='#667eea',
-                ha='center', va='center', weight='normal')
-    else:
-        ax.text(54, 72, "QUOTE CARD", fontsize=26, color='#667eea',
-                ha='center', va='center', weight='normal')
-
-    # 绘制作者（与标题保持距离）
-    if chinese_available:
-        ax.text(54, 67, author, fontsize=16, color='#636E72',
-                ha='center', va='center', style='italic')
-    else:
-        ax.text(54, 67, "By Author", fontsize=16, color='#636E72',
-                ha='center', va='center', style='italic')
-
     # 绘制金句背景卡片（收窄宽度）
-    quote_y = 55
+    quote_y = 100
     quote_height = 30
     ax.add_patch(patches.FancyBboxPatch((12, quote_y), 84, quote_height,
                                         boxstyle="round,pad=3",
@@ -645,6 +629,22 @@ def create_quote_card_image(title, author, quote):
         ax.text(54, start_y - 6, "Critical Thinking",
                fontsize=22, color='#636E72',
                ha='center', va='center')
+
+    # 绘制标题（在金句框下方）
+    if chinese_available:
+        ax.text(54, 22, title, fontsize=26, color='#667eea',
+                ha='center', va='center', weight='normal')
+    else:
+        ax.text(54, 22, "QUOTE CARD", fontsize=26, color='#667eea',
+                ha='center', va='center', weight='normal')
+
+    # 绘制作者（在标题下方）
+    if chinese_available:
+        ax.text(54, 17, author, fontsize=16, color='#636E72',
+                ha='center', va='center', style='italic')
+    else:
+        ax.text(54, 17, "By Author", fontsize=16, color='#636E72',
+                ha='center', va='center', style='italic')
 
     # 绘制底部品牌区域
     brand_y = 10
