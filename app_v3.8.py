@@ -546,36 +546,36 @@ def download_chinese_font():
 # ==================== 图片生成函数 ====================
 
 def create_quote_card_image(title, author, quote):
-    """生成金句卡片图片 - 使用matplotlib（更好的中文支持）"""
+    """生成金句卡片图片 - 简化版本，避免字体错误"""
     # 小红书头图尺寸：1080x1440 (3:4比例)
-    # 使用英寸单位，dpi=100，所以 10.8x14.4 英寸
     width_inch = 10.8
     height_inch = 14.4
     dpi = 100
+
+    # 下载或获取中文字体
+    chinese_font_path = download_chinese_font()
+
+    # 设置matplotlib的全局字体（简单方式）
+    plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial']
+    plt.rcParams['axes.unicode_minus'] = False
+
+    chinese_available = False
+    if chinese_font_path:
+        try:
+            # 注册字体
+            font_manager.fontManager.addfont(chinese_font_path)
+            font_prop = font_manager.FontProperties(fname=chinese_font_path)
+            font_name = font_prop.get_name()
+            plt.rcParams['font.sans-serif'] = [font_name, 'DejaVu Sans']
+            chinese_available = True
+        except:
+            chinese_available = False
 
     # 创建图形
     fig, ax = plt.subplots(figsize=(width_inch, height_inch), dpi=dpi)
     ax.set_xlim(0, 108)
     ax.set_ylim(0, 144)
     ax.axis('off')
-
-    # 下载或获取中文字体
-    chinese_font_path = download_chinese_font()
-
-    # 设置字体
-    if chinese_font_path:
-        try:
-            font_prop = font_manager.FontProperties(fname=chinese_font_path)
-            font_prop_bold = font_manager.FontProperties(fname=chinese_font_path, weight='bold')
-            chinese_available = True
-        except:
-            chinese_available = False
-            font_prop = font_manager.FontProperties(family='sans-serif')
-            font_prop_bold = font_manager.FontProperties(family='sans-serif', weight='bold')
-    else:
-        chinese_available = False
-        font_prop = font_manager.FontProperties(family='sans-serif')
-        font_prop_bold = font_manager.FontProperties(family='sans-serif', weight='bold')
 
     # 绘制白色背景
     ax.add_patch(patches.Rectangle((0, 0), 108, 144, facecolor='white', edgecolor='none'))
@@ -590,10 +590,10 @@ def create_quote_card_image(title, author, quote):
         color_val = 1 - (y - 12) * 0.04
         ax.add_patch(patches.Rectangle((0, y), 108, 1, facecolor=(color_val, color_val, min(1, color_val + 0.08))))
 
-    # 绘制标题
+    # 绘制标题（不再使用fontproperties参数）
     if chinese_available:
         ax.text(54, 17.5, title, fontsize=56, color='#667eea',
-                ha='center', va='center', fontproperties=font_prop_bold, weight='bold')
+                ha='center', va='center', weight='bold')
     else:
         ax.text(54, 17.5, "QUOTE CARD", fontsize=56, color='#667eea',
                 ha='center', va='center', weight='bold')
@@ -601,7 +601,7 @@ def create_quote_card_image(title, author, quote):
     # 绘制作者
     if chinese_available:
         ax.text(54, 13.5, author, fontsize=36, color='#636E72',
-                ha='center', va='center', fontproperties=font_prop)
+                ha='center', va='center')
     else:
         ax.text(54, 13.5, "By Author", fontsize=36, color='#636E72',
                 ha='center', va='center')
@@ -644,8 +644,7 @@ def create_quote_card_image(title, author, quote):
         for i, line in enumerate(lines):
             ax.text(54, start_y + i * line_height, line,
                    fontsize=52, color='#2D3436',
-                   ha='center', va='center',
-                   fontproperties=font_prop_bold, weight='bold')
+                   ha='center', va='center', weight='bold')
     else:
         # 如果中文不可用，显示占位文本
         ax.text(54, start_y + 2, "Deep Reading",
@@ -668,12 +667,10 @@ def create_quote_card_image(title, author, quote):
     if chinese_available:
         ax.text(54, brand_y + 3, "DeepRead 深读",
                fontsize=40, color='#667eea',
-               ha='center', va='center',
-               fontproperties=font_prop, weight='bold')
+               ha='center', va='center', weight='bold')
         ax.text(54, brand_y + 8.5, "深度阅读 · 沉浸思考",
                fontsize=30, color='#636E72',
-               ha='center', va='center',
-               fontproperties=font_prop)
+               ha='center', va='center')
     else:
         ax.text(54, brand_y + 3, "DeepRead",
                fontsize=40, color='#667eea',
@@ -693,26 +690,25 @@ def create_quote_card_image(title, author, quote):
 
 
 def create_reading_poster_image(title, author, emoji, tags, quote, stats):
-    """生成阅读海报图片 - 使用matplotlib（更好的中文支持）"""
+    """生成阅读海报图片 - 简化版本，避免字体错误"""
     # 下载或获取中文字体
     chinese_font_path = download_chinese_font()
 
+    # 设置matplotlib的全局字体（简单方式）
+    plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial']
+    plt.rcParams['axes.unicode_minus'] = False
+
+    chinese_available = False
     if chinese_font_path:
         try:
+            # 注册字体
+            font_manager.fontManager.addfont(chinese_font_path)
             font_prop = font_manager.FontProperties(fname=chinese_font_path)
-            font_prop_bold = font_manager.FontProperties(fname=chinese_font_path, weight='bold')
-            font_prop_small = font_manager.FontProperties(fname=chinese_font_path, size=10)
+            font_name = font_prop.get_name()
+            plt.rcParams['font.sans-serif'] = [font_name, 'DejaVu Sans']
             chinese_available = True
         except:
             chinese_available = False
-            font_prop = font_manager.FontProperties(family='sans-serif')
-            font_prop_bold = font_manager.FontProperties(family='sans-serif', weight='bold')
-            font_prop_small = font_manager.FontProperties(family='sans-serif', size=10)
-    else:
-        chinese_available = False
-        font_prop = font_manager.FontProperties(family='sans-serif')
-        font_prop_bold = font_manager.FontProperties(family='sans-serif', weight='bold')
-        font_prop_small = font_manager.FontProperties(family='sans-serif', size=10)
 
     # 计算高度（基于内容）
     padding = 5
@@ -747,7 +743,7 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
     # 标题
     if chinese_available:
         ax.text(30, y, title, fontsize=32, color='#2D3436',
-               ha='center', va='top', fontproperties=font_prop_bold, weight='bold')
+               ha='center', va='top', weight='bold')
     else:
         ax.text(30, y, "Reading", fontsize=32, color='#2D3436',
                ha='center', va='top', weight='bold')
@@ -756,7 +752,7 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
     # 作者
     if chinese_available:
         ax.text(30, y, author, fontsize=18, color='#636E72',
-               ha='center', va='top', fontproperties=font_prop)
+               ha='center', va='top')
     else:
         ax.text(30, y, "By Author", fontsize=18, color='#636E72',
                ha='center', va='top')
@@ -779,7 +775,7 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
             try:
                 ax.text(current_x + tag_width / 2, y - 1.5, tag,
                        fontsize=11, color='#667eea',
-                       ha='center', va='center', fontproperties=font_prop)
+                       ha='center', va='center')
             except:
                 pass
             current_x += tag_width + tag_spacing
@@ -821,8 +817,7 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
         if chinese_available:
             ax.text(30, quote_start_y - i * line_height, line,
                    fontsize=20, color='#2D3436',
-                   ha='center', va='top',
-                   fontproperties=font_prop_bold, weight='bold')
+                   ha='center', va='top', weight='bold')
         else:
             if i == 0:
                 ax.text(30, quote_start_y, "Deep Reading",
@@ -855,7 +850,7 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
     if chinese_available:
         ax.text(padding + 9, stats_y_start - 6, '已读书籍',
                fontsize=12, color='#636E72',
-               ha='center', va='center', fontproperties=font_prop_small)
+               ha='center', va='center')
     else:
         ax.text(padding + 9, stats_y_start - 6, 'Books Read',
                fontsize=12, color='#636E72',
@@ -880,7 +875,7 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
     if chinese_available:
         ax.text(padding + 9, y - 6, '阅读时长',
                fontsize=12, color='#636E72',
-               ha='center', va='center', fontproperties=font_prop_small)
+               ha='center', va='center')
     else:
         ax.text(padding + 9, y - 6, 'Time Spent',
                fontsize=12, color='#636E72',
@@ -892,12 +887,10 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
     if chinese_available:
         ax.text(30, brand_y, "DeepRead 深读",
                fontsize=18, color='#667eea',
-               ha='center', va='center',
-               fontproperties=font_prop_bold, weight='bold')
+               ha='center', va='center', weight='bold')
         ax.text(30, brand_y - 2, "深度阅读 · 沉浸思考",
                fontsize=11, color='#636E72',
-               ha='center', va='center',
-               fontproperties=font_prop_small)
+               ha='center', va='center')
     else:
         ax.text(30, brand_y, "DeepRead",
                fontsize=18, color='#667eea',
