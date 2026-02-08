@@ -15,6 +15,9 @@ from datetime import datetime, timedelta
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import base64
+import sqlite3
+import json
+import os
 import matplotlib
 matplotlib.use('Agg')  # 非交互式后端
 import matplotlib.pyplot as plt
@@ -47,6 +50,348 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from lazy_loader import get_book_content, get_cache_info, clear_cache
 from practice_tasks_enhanced import PRACTICE_TASKS
+
+
+# ==================== 数据持久化系统 ====================
+
+# 数据库文件路径
+DB_PATH = Path(__file__).parent / "deepread_data.db"
+
+
+def init_database():
+    """初始化数据库表"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    # 创建用户设置表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            reading_goals_json TEXT NOT NULL,
+            user_preferences_json TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # 插入默认设置（如果不存在）
+    cursor.execute('''
+        INSERT OR IGNORE INTO user_settings (id, reading_goals_json, user_preferences_json)
+        VALUES (1, ?, ?)
+    ''', (
+        json.dumps({
+            "books_per_month": 2,
+            "minutes_per_day": 30,
+            "enabled": True
+        }),
+        json.dumps({
+            "theme": "light",
+            "notification_enabled": True,
+            "reminder_time": "09:00",
+            "export_format": "markdown"
+        })
+    ))
+
+    # 创建阅读统计表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS reading_stats (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            total_books_read_json TEXT NOT NULL,
+            total_reading_time INTEGER DEFAULT 0,
+            last_read_time TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # 插入默认统计（如果不存在）
+    cursor.execute('''
+        INSERT OR IGNORE INTO reading_stats (id, total_books_read_json, total_reading_time)
+        VALUES (1, ?, 0)
+    ''', (json.dumps([]),))
+
+    # 创建阅读历史表（用于日历视图）
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS reading_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            read_date DATE NOT NULL UNIQUE,
+            reading_minutes INTEGER DEFAULT 0,
+            books_completed_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # 创建成就系统表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_achievements (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            unlocked_json TEXT NOT NULL,
+            last_check_time TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # 插入默认成就数据（如果不存在）
+    cursor.execute('''
+        INSERT OR IGNORE INTO user_achievements (id, unlocked_json)
+        VALUES (1, ?)
+    ''', (json.dumps([]),))
+
+    # 创建阅读进度表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS reading_progress (
+            book_id TEXT PRIMARY KEY,
+            current_chapter INTEGER DEFAULT 0,
+            progress_percent REAL DEFAULT 0.0,
+            last_read TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # 创建实践笔记和反思表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS practice_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            book_id TEXT NOT NULL,
+            book_title TEXT NOT NULL,
+            note_type TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    conn.commit()
+    conn.close()
+
+
+def get_db_connection():
+    """获取数据库连接"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def load_reading_goals():
+    """从数据库加载阅读目标"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT reading_goals_json FROM user_settings WHERE id = 1')
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return json.loads(row['reading_goals_json'])
+        return None
+    except Exception as e:
+        st.error(f"加载阅读目标失败: {e}")
+        return None
+
+
+def save_reading_goals(goals):
+    """保存阅读目标到数据库"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE user_settings
+            SET reading_goals_json = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = 1
+        ''', (json.dumps(goals),))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"保存阅读目标失败: {e}")
+        return False
+
+
+def load_reading_statistics():
+    """从数据库加载阅读统计"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT total_books_read_json, total_reading_time, last_read_time FROM reading_stats WHERE id = 1')
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return {
+                "total_books_read": set(json.loads(row['total_books_read_json'])),
+                "total_reading_time": row['total_reading_time'],
+                "last_read_time": row['last_read_time']
+            }
+        return None
+    except Exception as e:
+        st.error(f"加载阅读统计失败: {e}")
+        return None
+
+
+def save_reading_statistics(stats):
+    """保存阅读统计到数据库"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE reading_stats
+            SET total_books_read_json = ?, total_reading_time = ?,
+                last_read_time = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = 1
+        ''', (
+            json.dumps(list(stats["total_books_read"])),
+            stats["total_reading_time"],
+            stats["last_read_time"]
+        ))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"保存阅读统计失败: {e}")
+        return False
+
+
+def load_reading_history(days=30):
+    """从数据库加载阅读历史（用于日历视图）"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        end_date = datetime.now().date()
+        start_date = (end_date - timedelta(days=days-1))
+
+        cursor.execute('''
+            SELECT read_date, reading_minutes, books_completed_json
+            FROM reading_history
+            WHERE read_date BETWEEN ? AND ?
+            ORDER BY read_date DESC
+        ''', (start_date.isoformat(), end_date.isoformat()))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        history = {}
+        for row in rows:
+            history[row['read_date']] = {
+                "reading_minutes": row['reading_minutes'],
+                "books_completed": json.loads(row['books_completed_json']) if row['books_completed_json'] else []
+            }
+        return history
+    except Exception as e:
+        st.error(f"加载阅读历史失败: {e}")
+        return {}
+
+
+def save_reading_session(date_str, reading_minutes, completed_book=None):
+    """保存阅读会话到历史记录"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 获取现有记录
+        cursor.execute('SELECT reading_minutes, books_completed_json FROM reading_history WHERE read_date = ?', (date_str,))
+        row = cursor.fetchone()
+
+        if row:
+            # 更新现有记录
+            new_minutes = row['reading_minutes'] + reading_minutes
+            books_completed = json.loads(row['books_completed_json']) if row['books_completed_json'] else []
+            if completed_book and completed_book not in books_completed:
+                books_completed.append(completed_book)
+
+            cursor.execute('''
+                UPDATE reading_history
+                SET reading_minutes = ?, books_completed_json = ?
+                WHERE read_date = ?
+            ''', (new_minutes, json.dumps(books_completed), date_str))
+        else:
+            # 插入新记录
+            books_completed = [completed_book] if completed_book else []
+            cursor.execute('''
+                INSERT INTO reading_history (read_date, reading_minutes, books_completed_json)
+                VALUES (?, ?, ?)
+            ''', (date_str, reading_minutes, json.dumps(books_completed)))
+
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"保存阅读会话失败: {e}")
+        return False
+
+
+def load_achievements():
+    """从数据库加载成就数据"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT unlocked_json, last_check_time FROM user_achievements WHERE id = 1')
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return {
+                "unlocked": json.loads(row['unlocked_json']),
+                "last_check_time": row['last_check_time']
+            }
+        return None
+    except Exception as e:
+        st.error(f"加载成就数据失败: {e}")
+        return None
+
+
+def save_achievements(achievements):
+    """保存成就数据到数据库"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE user_achievements
+            SET unlocked_json = ?, last_check_time = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = 1
+        ''', (json.dumps(achievements.get("unlocked", [])), achievements.get("last_check_time")))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"保存成就数据失败: {e}")
+        return False
+
+
+def load_reading_progress():
+    """从数据库加载阅读进度"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT book_id, current_chapter, progress_percent, last_read FROM reading_progress')
+        rows = cursor.fetchall()
+        conn.close()
+
+        progress = {}
+        for row in rows:
+            progress[row['book_id']] = {
+                "current_chapter": row['current_chapter'],
+                "progress_percent": row['progress_percent'],
+                "last_read": row['last_read']
+            }
+        return progress
+    except Exception as e:
+        st.error(f"加载阅读进度失败: {e}")
+        return {}
+
+
+def save_reading_progress_item(book_id, chapter, percent):
+    """保存单个书籍的阅读进度"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT OR REPLACE INTO reading_progress (book_id, current_chapter, progress_percent, last_read, updated_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ''', (book_id, chapter, percent))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"保存阅读进度失败: {e}")
+        return False
+
 
 st.set_page_config(
     page_title="DeepRead 深读",
@@ -1047,6 +1392,11 @@ def generate_quote_card_html(title, author, quote):
 
 def init_session_state():
     """初始化session state"""
+    # 初始化数据库（首次运行时创建表）
+    if "db_initialized" not in st.session_state:
+        init_database()
+        st.session_state.db_initialized = True
+
     if "current_book" not in st.session_state:
         st.session_state.current_book = None
     if "current_content" not in st.session_state:
@@ -1070,29 +1420,45 @@ def init_session_state():
     if "guide_step" not in st.session_state:
         st.session_state.guide_step = 0  # 当前引导步骤（0-3）
 
-    # 阅读统计数据
+    # 从数据库加载阅读统计数据
     if "reading_stats" not in st.session_state:
-        st.session_state.reading_stats = {
-            "total_books_read": set(),  # 已读过的书名集合
-            "total_reading_time": 0,     # 总阅读时长（秒）
-            "last_read_time": None       # 最后阅读时间
-        }
+        stats_from_db = load_reading_statistics()
+        if stats_from_db:
+            st.session_state.reading_stats = stats_from_db
+        else:
+            st.session_state.reading_stats = {
+                "total_books_read": set(),  # 已读过的书名集合
+                "total_reading_time": 0,     # 总阅读时长（秒）
+                "last_read_time": None       # 最后阅读时间
+            }
 
     # 实践任务追踪数据
     if "practice_tracker" not in st.session_state:
         st.session_state.practice_tracker = {}  # 格式: {book_title: {week: {day: completed}}}
 
-    # 成就系统数据
+    # 从数据库加载成就系统数据
     if "achievements" not in st.session_state:
-        st.session_state.achievements = {
-            "unlocked": [],          # 已解锁的成就ID列表
-            "notifications": [],     # 成就通知队列
-            "last_check_time": None  # 上次检查成就的时间
-        }
+        achievements_from_db = load_achievements()
+        if achievements_from_db:
+            st.session_state.achievements = {
+                "unlocked": achievements_from_db.get("unlocked", []),
+                "notifications": [],
+                "last_check_time": achievements_from_db.get("last_check_time")
+            }
+        else:
+            st.session_state.achievements = {
+                "unlocked": [],          # 已解锁的成就ID列表
+                "notifications": [],     # 成就通知队列
+                "last_check_time": None  # 上次检查成就的时间
+            }
 
-    # 阅读进度追踪
+    # 从数据库加载阅读进度
     if "reading_progress" not in st.session_state:
-        st.session_state.reading_progress = {}  # 格式: {book_id: {"current_chapter": int, "progress_percent": float, "last_read": datetime}}
+        progress_from_db = load_reading_progress()
+        if progress_from_db:
+            st.session_state.reading_progress = progress_from_db
+        else:
+            st.session_state.reading_progress = {}  # 格式: {book_id: {"current_chapter": int, "progress_percent": float, "last_read": datetime}}
 
     # 实践笔记和反思数据
     if "practices" not in st.session_state:
@@ -1126,13 +1492,21 @@ def init_session_state():
             "last_review_check": None    # 上次检查复习的时间
         }
 
-    # 阅读目标设置
+    # 从数据库加载阅读目标设置
     if "reading_goals" not in st.session_state:
-        st.session_state.reading_goals = {
-            "books_per_month": 2,       # 每月读书目标
-            "minutes_per_day": 30,      # 每天阅读目标（分钟）
-            "enabled": True              # 是否启用目标
-        }
+        goals_from_db = load_reading_goals()
+        if goals_from_db:
+            st.session_state.reading_goals = goals_from_db
+        else:
+            st.session_state.reading_goals = {
+                "books_per_month": 2,       # 每月读书目标
+                "minutes_per_day": 30,      # 每天阅读目标（分钟）
+                "enabled": True              # 是否启用目标
+            }
+
+    # 加载阅读历史（用于日历视图）
+    if "reading_history_cache" not in st.session_state:
+        st.session_state.reading_history_cache = {}
 
 
 # ==================== 用户管理相关函数 ====================
@@ -1279,6 +1653,10 @@ def check_and_unlock_achievements():
                     "timestamp": datetime.now(),
                     "shown": False
                 })
+
+                # 保存成就到数据库
+                st.session_state.achievements["last_check_time"] = datetime.now()
+                save_achievements(st.session_state.achievements)
         except Exception as e:
             # 静默失败，避免影响用户体验
             pass
@@ -3461,8 +3839,10 @@ def render_reflection(content):
 
     # 更新阅读统计
     current_book = st.session_state.current_book
+    book_completed = False
     if current_book and current_book not in st.session_state.reading_stats["total_books_read"]:
         st.session_state.reading_stats["total_books_read"].add(current_book)
+        book_completed = True
 
         # 安排复习计划（仅在新完成阅读时）
         book_content = st.session_state.current_content
@@ -3470,11 +3850,21 @@ def render_reflection(content):
             schedule_review(current_book, book_content["title"])
 
     # 计算本次阅读时长并累加
+    reading_minutes_today = 0
     if 'reading_start_time' in st.session_state:
         import time
         elapsed = time.time() - st.session_state.reading_start_time
         st.session_state.reading_stats["total_reading_time"] += int(elapsed)
         st.session_state.reading_stats["last_read_time"] = time.time()
+        reading_minutes_today = int(elapsed) // 60  # 转换为分钟
+
+        # 保存今日阅读记录到数据库
+        today_date = datetime.now().date().isoformat()
+        completed_book_title = st.session_state.current_content.get("title") if book_completed else None
+        save_reading_session(today_date, reading_minutes_today, completed_book_title)
+
+    # 保存统计到数据库
+    save_reading_statistics(st.session_state.reading_stats)
 
     # 触发成就检查（完成书籍时）
     check_and_unlock_achievements()
@@ -3865,6 +4255,9 @@ def render_statistics():
     total_hours = stats["total_reading_time"] // 3600
     total_minutes = (stats["total_reading_time"] % 3600) // 60
 
+    # 从数据库加载最近30天的阅读历史
+    reading_history = load_reading_history(days=30)
+
     # 简化版日历 - 显示最近30天的阅读情况
     from datetime import date, timedelta
 
@@ -3874,14 +4267,11 @@ def render_statistics():
     # 生成最近30天的日历数据
     for i in range(29, -1, -1):  # 从30天前到今天
         day = (today - timedelta(days=i)).strftime("%Y-%m-%d")
-        # 模拟数据：如果有daily_progress就使用，否则随机生成
-        if day in stats.get("daily_progress", {}):
-            reading_minutes = stats["daily_progress"][day].get("minutes", 0)
+        # 从数据库获取阅读数据
+        if day in reading_history:
+            reading_minutes = reading_history[day]["reading_minutes"]
         else:
-            # 根据总阅读时间模拟分布
-            import random
-            random.seed(hash(day) % 1000)  # 使用日期作为种子
-            reading_minutes = random.randint(0, 60) if total_minutes > 0 else 0
+            reading_minutes = 0
 
         calendar_days.append({
             "date": day,
@@ -4352,6 +4742,8 @@ def render_sidebar():
                         if st.button("💾 保存", key="save_goals"):
                             st.session_state.reading_goals["books_per_month"] = int(new_books_goal)
                             st.session_state.reading_goals["minutes_per_day"] = int(new_minutes_goal)
+                            # 保存到数据库
+                            save_reading_goals(st.session_state.reading_goals)
                             st.success("✅ 目标已更新！")
                             st.rerun()
 
