@@ -1094,6 +1094,12 @@ def init_session_state():
     if "reading_progress" not in st.session_state:
         st.session_state.reading_progress = {}  # 格式: {book_id: {"current_chapter": int, "progress_percent": float, "last_read": datetime}}
 
+    # 实践笔记和反思数据
+    if "practices" not in st.session_state:
+        st.session_state.practices = {}  # 格式: {book_id: [practice_list]}
+    if "reflections" not in st.session_state:
+        st.session_state.reflections = {}  # 格式: {book_id: [reflection_list]}
+
     # 用户账户系统（P2功能）
     if "user_account" not in st.session_state:
         st.session_state.user_account = {
@@ -1543,8 +1549,8 @@ def update_reading_progress(book_id, chapter_index, total_chapters):
 
 def show_welcome_page():
     """显示首次访问欢迎页"""
-    # 使用更稳定的单行HTML格式
-    html_content = '<div style="text-align: center; padding: 4rem 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; margin: 2rem 0; color: white;"><h1 style="font-family: \'Noto Serif SC\', serif; font-size: 3rem; font-weight: 700; margin: 0 0 1rem 0; color: white;">开始你的深度阅读之旅 🧠</h1><p style="font-size: 1.2rem; margin: 0 0 2rem 0; opacity: 0.95;">不只是阅读，更是深度思考和行动</p><div style="display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; margin: 2rem 0;"><div style="flex: 1; min-width: 200px; padding: 1.5rem;"><div style="font-size: 3rem; margin-bottom: 0.5rem;">📖</div><div style="font-size: 1.1rem; font-weight: 600;">精选书籍</div><div style="font-size: 0.9rem; opacity: 0.85;">个人成长 · 认知提升</div></div><div style="flex: 1; min-width: 200px; padding: 1.5rem;"><div style="font-size: 3rem; margin-bottom: 0.5rem;">🎯</div><div style="font-size: 1.1rem; font-weight: 600;">实践追踪</div><div style="font-size: 0.9rem; opacity: 0.85;">30天习惯养成</div></div><div style="flex: 1; min-width: 200px; padding: 1.5rem;"><div style="font-size: 3rem; margin-bottom: 0.5rem;">💡</div><div style="font-size: 1.1rem; font-weight: 600;">深度思考</div><div style="font-size: 0.9rem; opacity: 0.85;">反思与输出</div></div></div><div style="background: rgba(255, 255, 255, 0.15); padding: 1rem 2rem; border-radius: 12px; margin: 2rem 0;"><div style="font-size: 1.2rem; margin-bottom: 0.5rem;">🎁 7天深度版免费试用</div><div style="font-size: 0.95rem; opacity: 0.9;">云同步 · 数据统计 · 智能推荐</div></div></div>'
+    # 使用优雅的浅色风格
+    html_content = '<div style="text-align: center; padding: 4rem 2rem; background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%); border-radius: 20px; margin: 2rem 0; border: 2px solid rgba(102, 126, 234, 0.1); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);"><h1 style="font-family: \'Noto Serif SC\', serif; font-size: 3rem; font-weight: 700; margin: 0 0 1rem 0; color: #2D3436;">开始你的深度阅读之旅 🧠</h1><p style="font-size: 1.2rem; margin: 0 0 2rem 0; color: #636E72;">不只是阅读，更是深度思考和行动</p><div style="display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; margin: 2rem 0;"><div style="flex: 1; min-width: 200px; padding: 1.5rem;"><div style="font-size: 3rem; margin-bottom: 0.5rem;">📖</div><div style="font-size: 1.1rem; font-weight: 600; color: #2D3436; margin-bottom: 0.25rem;">精选书籍</div><div style="font-size: 0.9rem; color: #636E72;">个人成长 · 认知提升</div></div><div style="flex: 1; min-width: 200px; padding: 1.5rem;"><div style="font-size: 3rem; margin-bottom: 0.5rem;">🎯</div><div style="font-size: 1.1rem; font-weight: 600; color: #2D3436; margin-bottom: 0.25rem;">实践追踪</div><div style="font-size: 0.9rem; color: #636E72;">30天习惯养成</div></div><div style="flex: 1; min-width: 200px; padding: 1.5rem;"><div style="font-size: 3rem; margin-bottom: 0.5rem;">💡</div><div style="font-size: 1.1rem; font-weight: 600; color: #2D3436; margin-bottom: 0.25rem;">深度思考</div><div style="font-size: 0.9rem; color: #636E72;">反思与输出</div></div></div><div style="background: rgba(102, 126, 234, 0.1); padding: 1rem 2rem; border-radius: 12px; margin: 2rem 0; display: inline-block;"><div style="font-size: 1.2rem; margin-bottom: 0.5rem; color: #667eea; font-weight: 600;">🎁 7天深度版免费试用</div><div style="font-size: 0.95rem; color: #636E72;">云同步 · 数据统计 · 智能推荐</div></div></div>'
 
     st.markdown(html_content, unsafe_allow_html=True)
 
@@ -1596,10 +1602,19 @@ def show_guide_bubble():
             """
             st.markdown(bubble_html, unsafe_allow_html=True)
 
-            # 使用Streamlit原生按钮而不是HTML button
-            if st.button(f"知道了（{current_step}/3）", key=f"guide_step_{current_step}"):
-                st.session_state.guide_step += 1
-                st.rerun()
+            # 按钮行
+            col_next, col_skip = st.columns([3, 1])
+
+            with col_next:
+                # 使用Streamlit原生按钮而不是HTML button
+                if st.button(f"知道了（{current_step}/3）", key=f"guide_step_{current_step}"):
+                    st.session_state.guide_step += 1
+                    st.rerun()
+
+            with col_skip:
+                if st.button("×", key=f"skip_guide_{current_step}", help="跳过引导"):
+                    st.session_state.guide_step = 4  # 跳过所有引导
+                    st.rerun()
 
 
 # ==================== 书籍数据 ====================
@@ -2414,7 +2429,7 @@ def render_book_card(book, center=False):
 
     # 按钮行 - 收藏和阅读
     if book["available"]:
-        col_fav, col_read, col_del = st.columns([1, 4, 1])
+        col_fav, col_read = st.columns([1, 5])
 
         with col_fav:
             if st.button(fav_emoji, key=f"fav_{book['title']}", help=fav_title):
@@ -2431,30 +2446,6 @@ def render_book_card(book, center=False):
                 st.session_state.current_content = get_book_content(book['title'])
                 st.session_state.current_section = "intro"
                 st.rerun()
-
-        with col_del:
-            if st.button("🗑️", key=f"del_{book['title']}", help="删除书籍"):
-                # 确认删除
-                if f"confirm_del_{book['title']}" not in st.session_state:
-                    st.session_state[f"confirm_del_{book['title']}"] = False
-
-                if st.session_state[f"confirm_del_{book['title']}"]:
-                    # 执行删除 - 从BOOKS_DATA中移除（通过标记为unavailable）
-                    for b in BOOKS_DATA:
-                        if b['title'] == book['title']:
-                            b['available'] = False
-                            break
-                    st.success(f"已删除《{book['title']}》")
-                    st.rerun()
-                else:
-                    st.session_state[f"confirm_del_{book['title']}"] = True
-                    st.rerun()
-
-                # 如果在确认状态，显示取消按钮
-                if st.session_state[f"confirm_del_{book['title']}"]:
-                    if st.button("取消", key=f"cancel_del_{book['title']}", use_container_width=True):
-                        st.session_state[f"confirm_del_{book['title']}"] = False
-                        st.rerun()
     else:
         st.markdown(f'<div style="text-align: center; color: #636E72; font-size: 0.75rem; font-style: italic; margin-top: 0.5rem;">即将推出</div>', unsafe_allow_html=True)
 
