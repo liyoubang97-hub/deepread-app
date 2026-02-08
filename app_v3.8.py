@@ -1036,6 +1036,18 @@ def init_session_state():
     if "page_rerun" not in st.session_state:
         st.session_state.page_rerun = 0
 
+    # 用户状态管理（新增）
+    if "is_first_visit" not in st.session_state:
+        st.session_state.is_first_visit = True
+    if "trial_start_date" not in st.session_state:
+        st.session_state.trial_start_date = datetime.now().date()
+    if "user_tier" not in st.session_state:
+        st.session_state.user_tier = "trial"  # trial, free, premium
+    if "guide_completed" not in st.session_state:
+        st.session_state.guide_completed = False
+    if "guide_step" not in st.session_state:
+        st.session_state.guide_step = 0  # 当前引导步骤（0-3）
+
     # 阅读统计数据
     if "reading_stats" not in st.session_state:
         st.session_state.reading_stats = {
@@ -1049,7 +1061,175 @@ def init_session_state():
         st.session_state.practice_tracker = {}  # 格式: {book_title: {week: {day: completed}}}
 
 
-# 书籍数据
+# ==================== 用户管理相关函数 ====================
+
+def get_trial_days_remaining():
+    """计算试用剩余天数"""
+    if st.session_state.user_tier != "trial":
+        return 0
+
+    trial_start = st.session_state.trial_start_date
+    days_passed = (datetime.now().date() - trial_start).days
+    remaining = 7 - days_passed
+    return max(0, remaining)
+
+
+def show_trial_notice():
+    """显示试用提醒横幅（如果需要）"""
+    if st.session_state.user_tier == "trial":
+        days_remaining = get_trial_days_remaining()
+
+        if days_remaining > 0:
+            st.info(f"🎁 7天深度版免费试用中，还剩 {days_remaining} 天")
+        elif days_remaining == 0:
+            st.warning("⏰ 试用已到期，升级深度版解锁更多功能")
+            st.markdown("""
+            <div style="text-align: center; margin: 1rem 0;">
+                <a href="#upgrade" style="color: #667eea; text-decoration: none; font-weight: 600;">
+                    🔓 查看深度版功能对比 →
+                </a>
+            </div>
+            """, unsafe_allow_html=True)
+
+
+def show_welcome_page():
+    """显示首次访问欢迎页"""
+    st.markdown("""
+    <div style="
+        text-align: center;
+        padding: 4rem 2rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 20px;
+        margin: 2rem 0;
+        color: white;
+    ">
+        <h1 style="
+            font-family: 'Noto Serif SC', serif;
+            font-size: 3rem;
+            font-weight: 700;
+            margin: 0 0 1rem 0;
+            color: white;
+        ">开始你的深度阅读之旅 🧠</h1>
+
+        <p style="
+            font-size: 1.2rem;
+            margin: 0 0 2rem 0;
+            opacity: 0.95;
+        ">不只是阅读，更是深度思考和行动</p>
+
+        <div style="
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+            margin: 2rem 0;
+        ">
+            <div style="flex: 1; min-width: 200px; padding: 1.5rem;">
+                <div style="font-size: 3rem; margin-bottom: 0.5rem;">📖</div>
+                <div style="font-size: 1.1rem; font-weight: 600;">精选书籍</div>
+                <div style="font-size: 0.9rem; opacity: 0.85;">个人成长 · 认知提升</div>
+            </div>
+
+            <div style="flex: 1; min-width: 200px; padding: 1.5rem;">
+                <div style="font-size: 3rem; margin-bottom: 0.5rem;">🎯</div>
+                <div style="font-size: 1.1rem; font-weight: 600;">实践追踪</div>
+                <div style="font-size: 0.9rem; opacity: 0.85;">30天习惯养成</div>
+            </div>
+
+            <div style="flex: 1; min-width: 200px; padding: 1.5rem;">
+                <div style="font-size: 3rem; margin-bottom: 0.5rem;">💡</div>
+                <div style="font-size: 1.1rem; font-weight: 600;">深度思考</div>
+                <div style="font-size: 0.9rem; opacity: 0.85;">反思与输出</div>
+            </div>
+        </div>
+
+        <div style="
+            background: rgba(255, 255, 255, 0.15);
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            margin: 2rem 0;
+        ">
+            <div style="font-size: 1.2rem; margin-bottom: 0.5rem;">🎁 7天深度版免费试用</div>
+            <div style="font-size: 0.95rem; opacity: 0.9;">云同步 · 数据统计 · 智能推荐</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("开始探索 🚀", use_container_width=True, key="start_exploring"):
+        st.session_state.is_first_visit = False
+        st.session_state.guide_step = 1
+        st.rerun()
+
+
+def show_guide_bubble():
+    """显示新手引导气泡"""
+    if not st.session_state.is_first_visit and st.session_state.guide_step < 4:
+
+        guide_steps = [
+            {
+                "step": 1,
+                "position": "书库页面",
+                "message": "👆 选择一本书开始阅读，点击卡片进入导读页",
+                "target": "书籍卡片"
+            },
+            {
+                "step": 2,
+                "position": "导读页",
+                "message": "💡 阅读完内容后，不要忘记记录实践计划和反思思考",
+                "target": "导读页"
+            },
+            {
+                "step": 3,
+                "position": "侧边栏",
+                "message": "📊 点击侧边栏查看你的阅读统计和成就",
+                "target": "侧边栏"
+            }
+        ]
+
+        current_step = st.session_state.guide_step
+        if current_step < len(guide_steps):
+            step_info = guide_steps[current_step - 1]
+
+            st.markdown(f"""
+            <div style="
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                z-index: 9999;
+                background: white;
+                padding: 1rem 1.5rem;
+                border-radius: 12px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                border-left: 4px solid #667eea;
+                max-width: 300px;
+            ">
+                <div style="font-size: 1rem; font-weight: 600; color: #2D3436; margin-bottom: 0.5rem;">
+                    {step_info['message']}
+                </div>
+                <div style="font-size: 0.85rem; color: #636E72; margin-bottom: 0.75rem;">
+                    目标：{step_info['target']}
+                </div>
+                <button onclick="document.querySelector('[data-testid=\"stMarkdownContainer\"]').querySelectorAll('button')[0].click();"
+                        style="
+                            background: #667eea;
+                            color: white;
+                            border: none;
+                            padding: 0.5rem 1rem;
+                            border-radius: 8px;
+                            cursor: pointer;
+                            font-size: 0.9rem;
+                        ">
+                    知道了 →
+                </button>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if st.button(f"知道了（{current_step}/3）", key=f"guide_step_{current_step}"):
+                st.session_state.guide_step += 1
+                st.rerun()
+
+
+# ==================== 书籍数据 ====================
 BOOKS_DATA = [
     {
         "title": "原子习惯",
@@ -3096,6 +3276,18 @@ def render_sidebar():
 def main():
     """主函数"""
     init_session_state()
+
+    # 显示欢迎页（首次访问）
+    if st.session_state.is_first_visit:
+        show_welcome_page()
+        return  # 欢迎页后直接返回，等待用户点击按钮
+
+    # 显示试用提醒横幅
+    if st.session_state.user_tier == "trial":
+        show_trial_notice()
+
+    # 显示新手引导气泡
+    show_guide_bubble()
 
     # 侧边栏
     render_sidebar()
