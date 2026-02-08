@@ -202,7 +202,7 @@ async def register(user: UserRegister):
             "user_id": user_id,
             "username": user.username,
             "token": token,
-            "message": "注册成功"
+            "message": "Registration successful"
         }
 
     except HTTPException:
@@ -246,7 +246,7 @@ async def login(user: UserLogin):
             "user_id": user_id,
             "username": user.username,
             "token": token,
-            "message": "登录成功"
+            "message": "Login successful"
         }
 
     except HTTPException:
@@ -309,7 +309,7 @@ async def sync_push(sync_data: SyncData):
             "success": True,
             "version": new_version,
             "timestamp": datetime.now().isoformat(),
-            "message": "数据同步成功"
+            "message": "Data sync successful"
         }
 
     except Exception as e:
@@ -345,7 +345,7 @@ async def sync_pull(request: SyncPull):
             "data": json.loads(row['data_json']),
             "version": row['version'],
             "last_updated": row['last_updated'],
-            "message": "数据拉取成功"
+            "message": "Data pull successful"
         }
 
     except Exception as e:
@@ -380,15 +380,24 @@ async def sync_status():
 # ==================== 启动服务器 ====================
 if __name__ == "__main__":
     import uvicorn
+    import sys
+    import io
+
+    # 设置标准输出为UTF-8编码
+    if sys.platform == "win32":
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
     # 初始化数据库
     init_server_database()
-    print("✅ 服务器数据库初始化完成")
+    print("[OK] Server database initialized")
 
     # 启动服务器
-    print("🚀 启动DeepRead云端同步服务器...")
-    print("📡 API地址: http://localhost:8000")
-    print("📚 API文档: http://localhost:8000/docs")
+    print("[START] DeepRead Cloud Sync Server starting...")
+    print("[INFO] API URL: http://localhost:8000")
+    print("[INFO] API Docs: http://localhost:8000/docs")
+    print("[INFO] Press Ctrl+C to stop the server")
+    print("-" * 50)
 
     uvicorn.run(
         app,
