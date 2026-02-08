@@ -590,12 +590,12 @@ def create_quote_card_image(title, author, quote):
         ax.text(54, 25, "QUOTE CARD", fontsize=26, color='#667eea',
                 ha='center', va='center', weight='normal')
 
-    # 绘制作者（进一步上移，使用优雅的斜体细字体）
+    # 绘制作者（与标题保持距离，使用优雅的斜体细字体）
     if chinese_available:
-        ax.text(54, 21.5, author, fontsize=16, color='#636E72',
+        ax.text(54, 20, author, fontsize=16, color='#636E72',
                 ha='center', va='center', style='italic')
     else:
-        ax.text(54, 21.5, "By Author", fontsize=16, color='#636E72',
+        ax.text(54, 20, "By Author", fontsize=16, color='#636E72',
                 ha='center', va='center', style='italic')
 
     # 绘制金句背景卡片（收窄宽度）
