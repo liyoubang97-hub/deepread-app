@@ -1543,36 +1543,18 @@ def update_reading_progress(book_id, chapter_index, total_chapters):
 
 def show_welcome_page():
     """显示首次访问欢迎页"""
-    st.markdown("""
-    <div style="
-        text-align: center;
-        padding: 4rem 2rem;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 20px;
-        margin: 2rem 0;
-        color: white;
-    ">
-        <h1 style="
-            font-family: 'Noto Serif SC', serif;
-            font-size: 3rem;
-            font-weight: 700;
-            margin: 0 0 1rem 0;
-            color: white;
-        ">开始你的深度阅读之旅 🧠</h1>
+    # 使用更稳定的HTML格式
+    html_content = """
+    <div style="text-align: center; padding: 4rem 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; margin: 2rem 0; color: white;">
+        <h1 style="font-family: 'Noto Serif SC', serif; font-size: 3rem; font-weight: 700; margin: 0 0 1rem 0; color: white;">
+            开始你的深度阅读之旅 🧠
+        </h1>
 
-        <p style="
-            font-size: 1.2rem;
-            margin: 0 0 2rem 0;
-            opacity: 0.95;
-        ">不只是阅读，更是深度思考和行动</p>
+        <p style="font-size: 1.2rem; margin: 0 0 2rem 0; opacity: 0.95;">
+            不只是阅读，更是深度思考和行动
+        </p>
 
-        <div style="
-            display: flex;
-            justify-content: center;
-            gap: 2rem;
-            flex-wrap: wrap;
-            margin: 2rem 0;
-        ">
+        <div style="display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; margin: 2rem 0;">
             <div style="flex: 1; min-width: 200px; padding: 1.5rem;">
                 <div style="font-size: 3rem; margin-bottom: 0.5rem;">📖</div>
                 <div style="font-size: 1.1rem; font-weight: 600;">精选书籍</div>
@@ -1592,17 +1574,14 @@ def show_welcome_page():
             </div>
         </div>
 
-        <div style="
-            background: rgba(255, 255, 255, 0.15);
-            padding: 1rem 2rem;
-            border-radius: 12px;
-            margin: 2rem 0;
-        ">
+        <div style="background: rgba(255, 255, 255, 0.15); padding: 1rem 2rem; border-radius: 12px; margin: 2rem 0;">
             <div style="font-size: 1.2rem; margin-bottom: 0.5rem;">🎁 7天深度版免费试用</div>
             <div style="font-size: 0.95rem; opacity: 0.9;">云同步 · 数据统计 · 智能推荐</div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """
+
+    st.markdown(html_content, unsafe_allow_html=True)
 
     if st.button("开始探索 🚀", use_container_width=True, key="start_exploring"):
         st.session_state.is_first_visit = False
