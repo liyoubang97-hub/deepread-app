@@ -1060,6 +1060,18 @@ def init_session_state():
     if "practice_tracker" not in st.session_state:
         st.session_state.practice_tracker = {}  # 格式: {book_title: {week: {day: completed}}}
 
+    # 成就系统数据
+    if "achievements" not in st.session_state:
+        st.session_state.achievements = {
+            "unlocked": [],          # 已解锁的成就ID列表
+            "notifications": [],     # 成就通知队列
+            "last_check_time": None  # 上次检查成就的时间
+        }
+
+    # 阅读进度追踪
+    if "reading_progress" not in st.session_state:
+        st.session_state.reading_progress = {}  # 格式: {book_id: {"current_chapter": int, "progress_percent": float, "last_read": datetime}}
+
 
 # ==================== 用户管理相关函数 ====================
 
@@ -1090,6 +1102,265 @@ def show_trial_notice():
                 </a>
             </div>
             """, unsafe_allow_html=True)
+
+
+# ==================== 成就系统 ====================
+
+# 成就定义配置
+ACHIEVEMENTS_DEFINITIONS = {
+    "first_book": {
+        "id": "first_book",
+        "name": "阅读萌芽",
+        "icon": "🌱",
+        "description": "完成第1本书",
+        "condition": lambda stats: len(stats["total_books_read"]) >= 1,
+        "tier": 1
+    },
+    "five_books": {
+        "id": "five_books",
+        "name": "阅读爱好者",
+        "icon": "📚",
+        "description": "完成5本书",
+        "condition": lambda stats: len(stats["total_books_read"]) >= 5,
+        "tier": 2
+    },
+    "ten_books": {
+        "id": "ten_books",
+        "name": "深度阅读者",
+        "icon": "👑",
+        "description": "完成10本书",
+        "condition": lambda stats: len(stats["total_books_read"]) >= 10,
+        "tier": 3
+    },
+    "first_note": {
+        "id": "first_note",
+        "name": "动笔思考",
+        "icon": "✍️",
+        "description": "记录第一条实践笔记",
+        "condition": lambda stats, notes: sum(len(practices) for practices in notes.values()) >= 1,
+        "tier": 1
+    },
+    "ten_notes": {
+        "id": "ten_notes",
+        "name": "思考积累",
+        "icon": "💡",
+        "description": "记录10条实践笔记",
+        "condition": lambda stats, notes: sum(len(practices) for practices in notes.values()) >= 10,
+        "tier": 2
+    },
+    "first_hour": {
+        "id": "first_hour",
+        "name": "入门时光",
+        "icon": "⏱️",
+        "description": "累计阅读1小时",
+        "condition": lambda stats: stats["total_reading_time"] >= 3600,
+        "tier": 1
+    },
+    "ten_hours": {
+        "id": "ten_hours",
+        "name": "投入阅读",
+        "icon": "⌛",
+        "description": "累计阅读10小时",
+        "condition": lambda stats: stats["total_reading_time"] >= 36000,
+        "tier": 2
+    },
+    "streak_3_days": {
+        "id": "streak_3_days",
+        "name": "连续阅读",
+        "icon": "🔥",
+        "description": "连续3天阅读",
+        "condition": lambda stats: len(stats.get("daily_progress", {})) >= 3,
+        "tier": 2
+    },
+    "first_reflection": {
+        "id": "first_reflection",
+        "name": "深度反思",
+        "icon": "🤔",
+        "description": "写下第一篇深度反思",
+        "condition": lambda stats, reflections: sum(len(refs) for refs in reflections.values()) >= 1,
+        "tier": 1
+    }
+}
+
+
+def check_and_unlock_achievements():
+    """检查并解锁成就"""
+    stats = st.session_state.reading_stats
+    notes = st.session_state.practices
+    reflections = st.session_state.reflections
+
+    newly_unlocked = []
+
+    for achievement_id, achievement in ACHIEVEMENTS_DEFINITIONS.items():
+        # 跳过已解锁的成就
+        if achievement_id in st.session_state.achievements["unlocked"]:
+            continue
+
+        # 检查解锁条件
+        try:
+            # 根据成就类型调用不同的条件函数
+            if achievement_id in ["first_note", "ten_notes"]:
+                is_unlocked = achievement["condition"](stats, notes)
+            elif achievement_id == "first_reflection":
+                is_unlocked = achievement["condition"](stats, reflections)
+            else:
+                is_unlocked = achievement["condition"](stats)
+
+            if is_unlocked:
+                # 解锁成就
+                st.session_state.achievements["unlocked"].append(achievement_id)
+                newly_unlocked.append(achievement)
+
+                # 添加到通知队列
+                st.session_state.achievements["notifications"].append({
+                    "achievement_id": achievement_id,
+                    "timestamp": datetime.now(),
+                    "shown": False
+                })
+        except Exception as e:
+            # 静默失败，避免影响用户体验
+            pass
+
+    return newly_unlocked
+
+
+def show_achievement_notifications():
+    """显示成就解锁通知"""
+    notifications = st.session_state.achievements["notifications"]
+
+    for i, notification in enumerate(notifications):
+        if not notification["shown"]:
+            achievement_id = notification["achievement_id"]
+            achievement = ACHIEVEMENTS_DEFINITIONS.get(achievement_id)
+
+            if achievement:
+                # 显示成就解锁通知
+                st.markdown(f"""
+                <div style="
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 1.5rem 2rem;
+                    border-radius: 12px;
+                    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+                    z-index: 9999;
+                    animation: slideIn 0.5s ease-out;
+                    min-width: 300px;
+                ">
+                    <div style="font-size: 0.8rem; opacity: 0.9; margin-bottom: 0.5rem;">
+                        🎉 成就解锁
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <div style="font-size: 2.5rem;">{achievement['icon']}</div>
+                        <div>
+                            <div style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.25rem;">
+                                {achievement['name']}
+                            </div>
+                            <div style="font-size: 0.8rem; opacity: 0.9;">
+                                {achievement['description']}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <style>
+                @keyframes slideIn {{
+                    from {{
+                        transform: translateX(400px);
+                        opacity: 0;
+                    }}
+                    to {{
+                        transform: translateX(0);
+                        opacity: 1;
+                    }}
+                }}
+                </style>
+                """, unsafe_allow_html=True)
+
+                # 标记为已显示
+                st.session_state.achievements["notifications"][i]["shown"] = True
+
+                # 自动关闭通知（3秒后）
+                import time
+                time.sleep(3)
+
+
+def get_achievement_progress():
+    """获取成就进度信息"""
+    stats = st.session_state.reading_stats
+    notes = st.session_state.practices
+    reflections = st.session_state.reflections
+
+    progress_info = {}
+
+    for achievement_id, achievement in ACHIEVEMENTS_DEFINITIONS.items():
+        is_unlocked = achievement_id in st.session_state.achievements["unlocked"]
+
+        # 计算进度
+        try:
+            if achievement_id == "first_book":
+                current = len(stats["total_books_read"])
+                target = 1
+            elif achievement_id == "five_books":
+                current = len(stats["total_books_read"])
+                target = 5
+            elif achievement_id == "ten_books":
+                current = len(stats["total_books_read"])
+                target = 10
+            elif achievement_id == "first_note":
+                current = sum(len(practices) for practices in notes.values())
+                target = 1
+            elif achievement_id == "ten_notes":
+                current = sum(len(practices) for practices in notes.values())
+                target = 10
+            elif achievement_id == "first_hour":
+                current = stats["total_reading_time"] // 3600
+                target = 1
+            elif achievement_id == "ten_hours":
+                current = stats["total_reading_time"] // 3600
+                target = 10
+            elif achievement_id == "streak_3_days":
+                current = len(stats.get("daily_progress", {}))
+                target = 3
+            elif achievement_id == "first_reflection":
+                current = sum(len(refs) for refs in reflections.values())
+                target = 1
+            else:
+                current = 0
+                target = 1
+
+            progress_info[achievement_id] = {
+                "unlocked": is_unlocked,
+                "current": min(current, target),
+                "target": target,
+                "percent": min(int((current / target) * 100) if target > 0 else 0, 100)
+            }
+        except Exception:
+            progress_info[achievement_id] = {
+                "unlocked": is_unlocked,
+                "current": 0,
+                "target": 1,
+                "percent": 0
+            }
+
+    return progress_info
+
+
+def update_reading_progress(book_id, chapter_index, total_chapters):
+    """更新阅读进度"""
+    if book_id not in st.session_state.reading_progress:
+        st.session_state.reading_progress[book_id] = {}
+
+    progress_percent = int((chapter_index / total_chapters) * 100) if total_chapters > 0 else 0
+
+    st.session_state.reading_progress[book_id] = {
+        "current_chapter": chapter_index,
+        "total_chapters": total_chapters,
+        "progress_percent": progress_percent,
+        "last_read": datetime.now()
+    }
 
 
 def show_welcome_page():
@@ -2251,6 +2522,9 @@ def render_practice_tasks(content):
 
     # 检查是否完成了30天挑战（必须100%完成）
     if total_progress >= 100 and user_habits:
+        # 触发成就检查
+        check_and_unlock_achievements()
+
         # 显示30天完成庆祝页面
         st.balloons()
 
@@ -2687,6 +2961,10 @@ def render_practice_tasks(content):
                         st.session_state.practice_tracker[book_title]["habits_completion"][day_str] = {}
 
                     st.session_state.practice_tracker[book_title]["habits_completion"][day_str][habit] = new_status
+
+                    # 检查成就（打卡时）
+                    check_and_unlock_achievements()
+
                     st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
@@ -2786,6 +3064,9 @@ def render_reflection(content):
         st.session_state.reading_stats["total_reading_time"] += int(elapsed)
         st.session_state.reading_stats["last_read_time"] = time.time()
 
+    # 触发成就检查（完成书籍时）
+    check_and_unlock_achievements()
+
     # 滚动到顶部
     scroll_to_top()
 
@@ -2849,6 +3130,9 @@ def render_reflection(content):
         if user_note:
             st.success("✓ 已记录")
             st.session_state.notes[f"q{idx}"] = user_note
+
+            # 触发成就检查（记录反思时）
+            check_and_unlock_achievements()
 
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -3207,73 +3491,173 @@ def render_statistics():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 成就系统（仅展示）
+    # 成就系统（完整版）
     st.markdown("### 🏆 阅读成就")
 
-    achievement_col1, achievement_col2, achievement_col3 = st.columns(3)
+    # 获取成就进度
+    achievement_progress = get_achievement_progress()
 
-    # 成就1：初学者
-    with achievement_col1:
-        is_unlocked = books_read_count >= 1
-        st.markdown(f"""
-        <div style="background: {'#ffeaa7' if is_unlocked else '#f0f0f0'};
-                    padding: 1.5rem; border-radius: 12px; text-align: center;
-                    border: 3px solid {'#fdcb6e' if is_unlocked else '#ccc'};">
-            <div style="font-size: 3rem; margin-bottom: 0.5rem;">{'🌱' if is_unlocked else '🔒'}</div>
-            <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">
-                阅读萌芽
-            </div>
-            <div style="font-size: 0.75rem; color: #636E72;">
-                完成第1本书
-            </div>
-            <div style="font-size: 0.7rem; margin-top: 0.5rem;
-                        color: {'#27ae60' if is_unlocked else '#999'};">
-                {'✓ 已解锁' if is_unlocked else f'{books_read_count}/1'}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    # 按等级分组展示成就
+    tier1_achievements = [a for a in ACHIEVEMENTS_DEFINITIONS.values() if a["tier"] == 1]
+    tier2_achievements = [a for a in ACHIEVEMENTS_DEFINITIONS.values() if a["tier"] == 2]
+    tier3_achievements = [a for a in ACHIEVEMENTS_DEFINITIONS.values() if a["tier"] == 3]
 
-    # 成就2：阅读者
-    with achievement_col2:
-        is_unlocked = books_read_count >= 5
-        st.markdown(f"""
-        <div style="background: {'#74b9ff' if is_unlocked else '#f0f0f0'};
-                    padding: 1.5rem; border-radius: 12px; text-align: center;
-                    border: 3px solid {'#0984e3' if is_unlocked else '#ccc'};">
-            <div style="font-size: 3rem; margin-bottom: 0.5rem;">{'📚' if is_unlocked else '🔒'}</div>
-            <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">
-                阅读爱好者
-            </div>
-            <div style="font-size: 0.75rem; color: #636E72;">
-                完成5本书
-            </div>
-            <div style="font-size: 0.7rem; margin-top: 0.5rem;
-                        color: {'#27ae60' if is_unlocked else '#999'};">
-                {'✓ 已解锁' if is_unlocked else f'{books_read_count}/5'}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    # Tier 1 成就（初级）
+    if tier1_achievements:
+        st.markdown("#### ⭐ 初级成就")
+        tier1_cols = st.columns(min(len(tier1_achievements), 3))
 
-    # 成就3：深度阅读者
-    with achievement_col3:
-        is_unlocked = books_read_count >= 10
-        st.markdown(f"""
-        <div style="background: {'#fd79a8' if is_unlocked else '#f0f0f0'};
-                    padding: 1.5rem; border-radius: 12px; text-align: center;
-                    border: 3px solid {'#e84393' if is_unlocked else '#ccc'};">
-            <div style="font-size: 3rem; margin-bottom: 0.5rem;">{'👑' if is_unlocked else '🔒'}</div>
-            <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">
-                深度阅读者
-            </div>
-            <div style="font-size: 0.75rem; color: #636E72;">
-                完成10本书
-            </div>
-            <div style="font-size: 0.7rem; margin-top: 0.5rem;
-                        color: {'#27ae60' if is_unlocked else '#999'};">
-                {'✓ 已解锁' if is_unlocked else f'{books_read_count}/10'}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        for i, achievement in enumerate(tier1_achievements):
+            with tier1_cols[i % 3]:
+                progress = achievement_progress[achievement["id"]]
+                is_unlocked = progress["unlocked"]
+
+                # 进度条颜色
+                if is_unlocked:
+                    progress_color = "#27ae60"
+                    bg_color = "#d4edda"
+                    border_color = "#28a745"
+                else:
+                    progress_color = "#667eea"
+                    bg_color = "#f0f0f0"
+                    border_color = "#ddd"
+
+                st.markdown(f"""
+                <div style="background: {bg_color};
+                           padding: 1rem; border-radius: 10px;
+                           border: 2px solid {border_color}; margin-bottom: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <div style="font-size: 2rem;">{achievement['icon'] if is_unlocked else '🔒'}</div>
+                        <div style="flex: 1;">
+                            <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.25rem;">
+                                {achievement['name']}
+                            </div>
+                            <div style="font-size: 0.7rem; color: #636E72;">
+                                {achievement['description']}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.7rem; margin-bottom: 0.25rem;">
+                            <span>进度</span>
+                            <span style="color: {progress_color}; font-weight: 600;">
+                                {progress['current']}/{progress['target']}
+                                {' ✓ 已解锁' if is_unlocked else f' ({progress["percent"]}%)'}
+                            </span>
+                        </div>
+                        <div style="background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden;">
+                            <div style="background: {progress_color}; height: 100%;
+                                       width: {progress['percent']}%; transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Tier 2 成就（中级）
+    if tier2_achievements:
+        st.markdown("#### 🌟 中级成就")
+        tier2_cols = st.columns(min(len(tier2_achievements), 3))
+
+        for i, achievement in enumerate(tier2_achievements):
+            with tier2_cols[i % 3]:
+                progress = achievement_progress[achievement["id"]]
+                is_unlocked = progress["unlocked"]
+
+                # 进度条颜色
+                if is_unlocked:
+                    progress_color = "#27ae60"
+                    bg_color = "#d4edda"
+                    border_color = "#28a745"
+                else:
+                    progress_color = "#f39c12"
+                    bg_color = "#fef5e7"
+                    border_color = "#f39c12"
+
+                st.markdown(f"""
+                <div style="background: {bg_color};
+                           padding: 1rem; border-radius: 10px;
+                           border: 2px solid {border_color}; margin-bottom: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <div style="font-size: 2rem;">{achievement['icon'] if is_unlocked else '🔒'}</div>
+                        <div style="flex: 1;">
+                            <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.25rem;">
+                                {achievement['name']}
+                            </div>
+                            <div style="font-size: 0.7rem; color: #636E72;">
+                                {achievement['description']}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.7rem; margin-bottom: 0.25rem;">
+                            <span>进度</span>
+                            <span style="color: {progress_color}; font-weight: 600;">
+                                {progress['current']}/{progress['target']}
+                                {' ✓ 已解锁' if is_unlocked else f' ({progress["percent"]}%)'}
+                            </span>
+                        </div>
+                        <div style="background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden;">
+                            <div style="background: {progress_color}; height: 100%;
+                                       width: {progress['percent']}%; transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Tier 3 成就（高级）
+    if tier3_achievements:
+        st.markdown("#### 👑 高级成就")
+        tier3_cols = st.columns(min(len(tier3_achievements), 3))
+
+        for i, achievement in enumerate(tier3_achievements):
+            with tier3_cols[i % 3]:
+                progress = achievement_progress[achievement["id"]]
+                is_unlocked = progress["unlocked"]
+
+                # 进度条颜色
+                if is_unlocked:
+                    progress_color = "#27ae60"
+                    bg_color = "#d4edda"
+                    border_color = "#28a745"
+                else:
+                    progress_color = "#9b59b6"
+                    bg_color = "#f4ecf7"
+                    border_color = "#9b59b6"
+
+                st.markdown(f"""
+                <div style="background: {bg_color};
+                           padding: 1rem; border-radius: 10px;
+                           border: 2px solid {border_color}; margin-bottom: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <div style="font-size: 2rem;">{achievement['icon'] if is_unlocked else '🔒'}</div>
+                        <div style="flex: 1;">
+                            <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.25rem;">
+                                {achievement['name']}
+                            </div>
+                            <div style="font-size: 0.7rem; color: #636E72;">
+                                {achievement['description']}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.7rem; margin-bottom: 0.25rem;">
+                            <span>进度</span>
+                            <span style="color: {progress_color}; font-weight: 600;">
+                                {progress['current']}/{progress['target']}
+                                {' ✓ 已解锁' if is_unlocked else f' ({progress["percent"]}%)'}
+                            </span>
+                        </div>
+                        <div style="background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden;">
+                            <div style="background: {progress_color}; height: 100%;
+                                       width: {progress['percent']}%; transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -3600,6 +3984,9 @@ def main():
     # 显示试用提醒横幅
     if st.session_state.user_tier == "trial":
         show_trial_notice()
+
+    # 显示成就解锁通知
+    show_achievement_notifications()
 
     # 显示新手引导气泡
     show_guide_bubble()
