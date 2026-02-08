@@ -30,7 +30,7 @@ ALGORITHM = "HS256"
 # ==================== FastAPI App ====================
 app = FastAPI(
     title="DeepRead Cloud Sync API",
-    description="云端数据同步服务",
+    description="Cloud data synchronization service",
     version="1.0.0"
 )
 
@@ -175,12 +175,12 @@ async def register(user: UserRegister):
         # 检查用户名是否已存在
         cursor.execute('SELECT id FROM users WHERE username = ?', (user.username,))
         if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="用户名已存在")
+            raise HTTPException(status_code=400, detail="Username already exists")
 
         # 检查邮箱是否已存在
         cursor.execute('SELECT id FROM users WHERE email = ?', (user.email,))
         if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="邮箱已被注册")
+            raise HTTPException(status_code=400, detail="Email already registered")
 
         # 创建用户
         user_id = str(uuid.uuid4())
@@ -209,7 +209,7 @@ async def register(user: UserRegister):
         raise
     except Exception as e:
         conn.close()
-        raise HTTPException(status_code=500, detail=f"注册失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 
 @app.post("/api/auth/login")
@@ -224,14 +224,14 @@ async def login(user: UserLogin):
         row = cursor.fetchone()
 
         if not row:
-            raise HTTPException(status_code=401, detail="用户名或密码错误")
+            raise HTTPException(status_code=401, detail="Invalid username or password")
 
         user_id = row['id']
         password_hash = row['password_hash']
 
         # 验证密码
         if not verify_password(user.password, password_hash):
-            raise HTTPException(status_code=401, detail="用户名或密码错误")
+            raise HTTPException(status_code=401, detail="Invalid username or password")
 
         # 生成token
         token = generate_token(user_id)
@@ -253,7 +253,7 @@ async def login(user: UserLogin):
         raise
     except Exception as e:
         conn.close()
-        raise HTTPException(status_code=500, detail=f"登录失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
 
 
 @app.post("/api/sync/push")
@@ -313,7 +313,7 @@ async def sync_push(sync_data: SyncData):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"同步失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
 
 
 @app.post("/api/sync/pull")
@@ -335,7 +335,7 @@ async def sync_pull(request: SyncPull):
                 "success": True,
                 "data": None,
                 "version": 0,
-                "message": "暂无云端数据"
+                "message": "No cloud data available"
             }
 
         conn.close()
@@ -349,7 +349,7 @@ async def sync_pull(request: SyncPull):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"拉取失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Pull failed: {str(e)}")
 
 
 @app.get("/api/sync/status")
