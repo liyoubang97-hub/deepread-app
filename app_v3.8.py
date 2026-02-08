@@ -703,15 +703,15 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
         except:
             chinese_available = False
 
-    # 计算高度（基于内容）
-    padding = 5
-    emoji_h = 8
-    title_h = 5
-    author_h = 3
-    tags_h = 4 if tags else 0
-    quote_h = 12
-    stats_h = 20
-    brand_h = 6
+    # 计算高度（减少间距，更紧凑）
+    padding = 3
+    emoji_h = 6
+    title_h = 4
+    author_h = 2
+    tags_h = 3 if tags else 0
+    quote_h = 10
+    stats_h = 16
+    brand_h = 5
 
     total_height = padding + emoji_h + title_h + author_h + tags_h + padding + quote_h + padding + stats_h + padding + brand_h
 
@@ -728,26 +728,26 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
 
     # Emoji
     try:
-        ax.text(30, y, emoji, fontsize=32, ha='center', va='top')
+        ax.text(30, y, emoji, fontsize=28, ha='center', va='top')
     except:
-        ax.text(30, y, '📖', fontsize=32, ha='center', va='top')
+        ax.text(30, y, '📖', fontsize=28, ha='center', va='top')
     y -= emoji_h
 
     # 标题（缩小字体）
     if chinese_available:
-        ax.text(30, y, title, fontsize=24, color='#2D3436',
+        ax.text(30, y, title, fontsize=22, color='#2D3436',
                ha='center', va='top', weight='bold')
     else:
-        ax.text(30, y, "Reading", fontsize=24, color='#2D3436',
+        ax.text(30, y, "Reading", fontsize=22, color='#2D3436',
                ha='center', va='top', weight='bold')
     y -= title_h
 
     # 作者（缩小字体）
     if chinese_available:
-        ax.text(30, y, author, fontsize=14, color='#636E72',
+        ax.text(30, y, author, fontsize=13, color='#636E72',
                ha='center', va='top')
     else:
-        ax.text(30, y, "By Author", fontsize=14, color='#636E72',
+        ax.text(30, y, "By Author", fontsize=13, color='#636E72',
                ha='center', va='top')
     y -= author_h + 1
 
