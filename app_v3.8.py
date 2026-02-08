@@ -5433,19 +5433,30 @@ def render_sidebar():
             with col_backup:
                 if st.button("☁️ 云端备份", key="simple_cloud_backup", use_container_width=True, type="primary"):
                     with st.spinner("正在备份到云端..."):
-                        # 自动注册/登录
+                        # 智能登录/注册逻辑
                         if not st.session_state.get("cloud_sync_token"):
-                            # 自动注册
-                            result = register_cloud_user(
-                                user_identifier,
-                                f"{user_identifier}@auto.local",
-                                "auto123"
-                            )
-                            if result.get("success"):
-                                st.session_state.cloud_sync_token = result.get("token")
+                            # 先尝试登录
+                            login_result = login_cloud_user(user_identifier, "auto123")
+
+                            if login_result.get("success"):
+                                # 登录成功
+                                st.session_state.cloud_sync_token = login_result.get("token")
+                            else:
+                                # 登录失败，尝试注册
+                                register_result = register_cloud_user(
+                                    user_identifier,
+                                    f"{user_identifier}@auto.local",
+                                    "auto123"
+                                )
+                                if register_result.get("success"):
+                                    st.session_state.cloud_sync_token = register_result.get("token")
+                                else:
+                                    st.error("❌ 注册失败，请尝试其他标识符")
+                                    st.stop()
 
                         # 备份数据
-                        if auto_sync_to_cloud():
+                        success = auto_sync_to_cloud()
+                        if success:
                             st.success("✅ 备份成功！数据已保存到云端")
                             time.sleep(1)
                         else:
@@ -5454,14 +5465,21 @@ def render_sidebar():
             with col_restore:
                 if st.button("📥 云端恢复", key="simple_cloud_restore", use_container_width=True):
                     with st.spinner("正在从云端恢复..."):
-                        # 自动登录
+                        # 智能登录/注册逻辑
                         if not st.session_state.get("cloud_sync_token"):
-                            result = login_cloud_user(user_identifier, "auto123")
-                            if result.get("success"):
-                                st.session_state.cloud_sync_token = result.get("token")
+                            # 先尝试登录
+                            login_result = login_cloud_user(user_identifier, "auto123")
+
+                            if login_result.get("success"):
+                                # 登录成功
+                                st.session_state.cloud_sync_token = login_result.get("token")
+                            else:
+                                st.error("❌ 用户不存在，请先备份一次数据")
+                                st.stop()
 
                         # 恢复数据
-                        if auto_sync_from_cloud():
+                        success = auto_sync_from_cloud()
+                        if success:
                             st.success("✅ 恢复成功！数据已从云端同步")
                             time.sleep(1)
                             st.rerun()
@@ -5598,11 +5616,21 @@ def main():
         if seconds_since_sync >= 360:
             # 静默自动备份，不影响用户使用
             try:
-                # 自动登录（如果需要）
+                # 智能登录/注册
                 if not st.session_state.get("cloud_sync_token"):
-                    result = login_cloud_user(st.session_state.cloud_sync_username, "auto123")
-                    if result.get("success"):
-                        st.session_state.cloud_sync_token = result.get("token")
+                    # 先尝试登录
+                    login_result = login_cloud_user(st.session_state.cloud_sync_username, "auto123")
+                    if login_result.get("success"):
+                        st.session_state.cloud_sync_token = login_result.get("token")
+                    else:
+                        # 登录失败，尝试注册
+                        register_result = register_cloud_user(
+                            st.session_state.cloud_sync_username,
+                            f"{st.session_state.cloud_sync_username}@auto.local",
+                            "auto123"
+                        )
+                        if register_result.get("success"):
+                            st.session_state.cloud_sync_token = register_result.get("token")
 
                 # 自动备份
                 auto_sync_to_cloud()
