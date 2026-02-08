@@ -393,6 +393,302 @@ def save_reading_progress_item(book_id, chapter, percent):
         return False
 
 
+
+# ==================== 云端同步系统 ====================
+
+def export_all_data():
+    """导出所有用户数据到字典（用于云端同步）"""
+    try:
+        data = {
+            "export_time": datetime.now().isoformat(),
+            "version": "3.8",
+            "reading_goals": st.session_state.reading_goals,
+            "reading_stats": {
+                "total_books_read": list(st.session_state.reading_stats["total_books_read"]),
+                "total_reading_time": st.session_state.reading_stats["total_reading_time"],
+                "last_read_time": st.session_state.reading_stats["last_read_time"]
+            },
+            "achievements": {
+                "unlocked": st.session_state.achievements["unlocked"],
+                "last_check_time": st.session_state.achievements["last_check_time"]
+            },
+            "reading_progress": st.session_state.reading_progress,
+            "reading_history": load_reading_history(days=365),  # 导出一年的历史
+            "user_preferences": st.session_state.user_account["preferences"],
+            "trial_info": {
+                "trial_start_date": st.session_state.trial_start_date.isoformat() if hasattr(st.session_state.trial_start_date, 'isoformat') else str(st.session_state.trial_start_date),
+                "user_tier": st.session_state.user_tier
+            }
+        }
+        return data
+    except Exception as e:
+        st.error(f"导出数据失败: {e}")
+        return None
+
+
+def import_data(data_dict, merge_strategy="merge"):
+    """
+    导入数据（从云端同步）
+
+    Args:
+        data_dict: 导入的数据字典
+        merge_strategy: 合并策略
+            - "replace": 完全覆盖本地数据
+            - "merge": 合并数据（保留最新的）
+            - "skip": 跳过冲突的数据
+    """
+    try:
+        if not data_dict or "version" not in data_dict:
+            st.error("无效的数据格式")
+            return False
+
+        success_count = 0
+
+        # 导入阅读目标
+        if "reading_goals" in data_dict:
+            if merge_strategy == "replace" or st.session_state.reading_goals.get("books_per_month", 0) == 2:
+                st.session_state.reading_goals = data_dict["reading_goals"]
+                save_reading_goals(st.session_state.reading_goals)
+                success_count += 1
+
+        # 导入阅读统计（合并策略）
+        if "reading_stats" in data_dict:
+            imported_stats = data_dict["reading_stats"]
+            if merge_strategy == "replace":
+                st.session_state.reading_stats["total_books_read"] = set(imported_stats["total_books_read"])
+                st.session_state.reading_stats["total_reading_time"] = imported_stats["total_reading_time"]
+            else:
+                # 合并：取并集和最大值
+                st.session_state.reading_stats["total_books_read"].update(set(imported_stats["total_books_read"]))
+                st.session_state.reading_stats["total_reading_time"] = max(
+                    st.session_state.reading_stats["total_reading_time"],
+                    imported_stats["total_reading_time"]
+                )
+            save_reading_statistics(st.session_state.reading_stats)
+            success_count += 1
+
+        # 导入成就（合并）
+        if "achievements" in data_dict:
+            imported_achievements = set(data_dict["achievements"]["unlocked"])
+            current_achievements = set(st.session_state.achievements["unlocked"])
+            merged_achievements = current_achievements.union(imported_achievements)
+            st.session_state.achievements["unlocked"] = list(merged_achievements)
+            save_achievements(st.session_state.achievements)
+            success_count += 1
+
+        # 导入阅读历史（合并）
+        if "reading_history" in data_dict:
+            for date_str, day_data in data_dict["reading_history"].items():
+                save_reading_session(
+                    date_str,
+                    day_data["reading_minutes"],
+                    day_data.get("books_completed", [None])[0]
+                )
+            success_count += 1
+
+        # 导入用户偏好
+        if "user_preferences" in data_dict:
+            if merge_strategy == "replace":
+                st.session_state.user_account["preferences"] = data_dict["user_preferences"]
+            else:
+                st.session_state.user_account["preferences"].update(data_dict["user_preferences"])
+            success_count += 1
+
+        return success_count > 0
+
+    except Exception as e:
+        st.error(f"导入数据失败: {e}")
+        return False
+
+
+# ==================== 智能推荐引擎 ====================
+
+def get_reading_patterns():
+    """分析用户的阅读模式"""
+    history = load_reading_history(days=90)  # 分析最近90天
+    stats = st.session_state.reading_stats
+
+    patterns = {
+        "total_days_active": len([d for d in history.values() if d["reading_minutes"] > 0]),
+        "avg_minutes_per_day": 0,
+        "favorite_days": [],  # 最常阅读的星期
+        "best_time_slots": [],  # 最佳阅读时段
+        "preferred_categories": [],  # 偏好的书籍类别
+        "completion_rate": 0,  # 完成率
+        "total_books_completed": len(stats["total_books_read"])
+    }
+
+    if history:
+        total_minutes = sum(d["reading_minutes"] for d in history.values())
+        patterns["avg_minutes_per_day"] = total_minutes // len(history) if len(history) > 0 else 0
+
+    return patterns
+
+
+def recommend_books():
+    """基于用户数据推荐书籍"""
+    try:
+        from lazy_loader import BOOKS_DATA
+
+        if not BOOKS_DATA:
+            return []
+
+        # 获取用户数据
+        stats = st.session_state.reading_stats
+        goals = st.session_state.reading_goals
+        history = load_reading_history(days=30)
+
+        # 已读过的书
+        read_books = stats["total_books_read"]
+        book_titles = [book.get("title", book) for book in BOOKS_DATA]
+
+        recommendations = []
+
+        # 推荐逻辑1: 基于阅读目标
+        if goals["enabled"]:
+            books_per_month = goals["books_per_month"]
+            current_month_books = len(read_books)
+
+            # 如果当前月读书少，推荐短篇易读的书
+            if current_month_books < books_per_month:
+                for book in BOOKS_DATA:
+                    if book.get("title") not in read_books:
+                        # 推荐评分高的书
+                        if book.get("rating", 0) >= 4.5:
+                            recommendations.append({
+                                "book": book,
+                                "reason": "📈 高评分推荐",
+                                "priority": 1
+                            })
+
+        # 推荐逻辑2: 基于阅读历史
+        if history:
+            # 找出用户喜欢的类别（这里简化处理，实际可以更复杂）
+            active_days = len([d for d in history.values() if d["reading_minutes"] >= 30])
+            if active_days >= 10:  # 活跃用户
+                for book in BOOKS_DATA:
+                    if book.get("title") not in read_books and book.get("title") not in [r["book"].get("title") for r in recommendations]:
+                        recommendations.append({
+                            "book": book,
+                            "reason": "🔥 深度阅读推荐",
+                            "priority": 2
+                        })
+
+        # 推荐逻辑3: 基于阅读时长
+        total_hours = stats["total_reading_time"] // 3600
+        if total_hours >= 10:  # 有10小时以上阅读经验
+            for book in BOOKS_DATA:
+                if book.get("title") not in read_books and book.get("title") not in [r["book"].get("title") for r in recommendations]:
+                    # 推荐进阶书籍
+                    if any(tag in book.get("tags", []) for tag in ["思维", "方法", "成长"]):
+                        recommendations.append({
+                            "book": book,
+                            "reason": "🚀 进阶提升推荐",
+                            "priority": 3
+                        })
+
+        # 推荐逻辑4: 随机推荐（保证多样性）
+        if len(recommendations) < 5:
+            import random
+            unread_books = [book for book in BOOKS_DATA if book.get("title") not in read_books]
+            if unread_books:
+                random_book = random.choice(unread_books)
+                if random_book.get("title") not in [r["book"].get("title") for r in recommendations]:
+                    recommendations.append({
+                        "book": random_book,
+                        "reason": "🎲 每日探索",
+                        "priority": 4
+                    })
+
+        # 按优先级排序并去重
+        seen_titles = set()
+        unique_recommendations = []
+        for rec in sorted(recommendations, key=lambda x: x["priority"]):
+            title = rec["book"].get("title")
+            if title not in seen_titles:
+                seen_titles.add(title)
+                unique_recommendations.append(rec)
+
+        return unique_recommendations[:6]  # 最多返回6个推荐
+
+    except Exception as e:
+        st.error(f"生成推荐失败: {e}")
+        return []
+
+
+def get_reading_insights():
+    """获取阅读洞察和建议"""
+    stats = st.session_state.reading_stats
+    goals = st.session_state.reading_goals
+    history = load_reading_history(days=30)
+
+    insights = []
+
+    # 洞察1: 阅读频率分析
+    if history:
+        active_days = len([d for d in history.values() if d["reading_minutes"] > 0])
+        if active_days >= 20:
+            insights.append({
+                "type": "success",
+                "icon": "🔥",
+                "title": "阅读习惯养成",
+                "message": f"最近30天有{active_days}天在阅读，保持得很好！"
+            })
+        elif active_days >= 10:
+            insights.append({
+                "type": "info",
+                "icon": "📈",
+                "title": "持续进步",
+                "message": f"最近30天有{active_days}天在阅读，继续加油！"
+            })
+        else:
+            insights.append({
+                "type": "warning",
+                "icon": "⏰",
+                "title": "建议增加阅读频率",
+                "message": "尝试每天安排15-30分钟的阅读时间"
+            })
+
+    # 洞察2: 目标完成情况
+    if goals["enabled"]:
+        books_read = len(stats["total_books_read"])
+        target = goals["books_per_month"]
+        if books_read >= target:
+            insights.append({
+                "type": "success",
+                "icon": "🎯",
+                "title": "月度目标达成",
+                "message": f"已完成{books_read}本书，超过目标{target}本！"
+            })
+        else:
+            remaining = target - books_read
+            insights.append({
+                "type": "info",
+                "icon": "📚",
+                "title": "月度目标进度",
+                "message": f"还需阅读{remaining}本书达成月度目标"
+            })
+
+    # 洞察3: 阅读时长分析
+    total_hours = stats["total_reading_time"] // 3600
+    if total_hours >= 100:
+        insights.append({
+            "type": "success",
+            "icon": "👑",
+            "title": "深度阅读者",
+            "message": f"累计阅读{total_hours}小时，已是资深读者！"
+        })
+    elif total_hours >= 50:
+        insights.append({
+            "type": "info",
+            "icon": "⭐",
+            "title": "阅读积累",
+            "message": f"累计阅读{total_hours}小时，继续积累！"
+        })
+
+    return insights[:5]  # 最多返回5条洞察
+
+
 st.set_page_config(
     page_title="DeepRead 深读",
     page_icon="🧠",
@@ -2753,6 +3049,84 @@ def render_library():
     elif sort_option == "可阅读优先":
         filtered_books.sort(key=lambda x: not x['available'])
 
+    # ========== 智能推荐区域 ==========
+    # 如果没有搜索或筛选，显示推荐
+    if not search_query and not st.session_state.selected_tags:
+        recommendations = recommend_books()
+
+        if recommendations:
+            st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+            st.markdown("### ✨ 为你推荐")
+
+            # 推荐书籍卡片
+            for rec in recommendations[:3]:  # 显示前3个推荐
+                book = rec["book"]
+                reason = rec["reason"]
+
+                # 推荐卡片
+                st.markdown(f"""
+<div style="background: linear-gradient(145deg, #f8f9fa 0%, #e8eef2 100%); border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; border: 2px solid rgba(102, 126, 234, 0.15);">
+    <div style="display: flex; justify-content: space-between; align-items: start;">
+        <div style="flex: 1;">
+            <div style="font-size: 0.75rem; color: #667eea; font-weight: 600; margin-bottom: 0.5rem;">{reason}</div>
+            <div style="font-size: 1.1rem; font-weight: 600; color: #2D3436; margin-bottom: 0.25rem;">{book['title']}</div>
+            <div style="font-size: 0.85rem; color: #636E72; margin-bottom: 0.75rem;">{book['author']}</div>
+            <div style="font-size: 0.8rem; color: #636E72; line-height: 1.5;">{book['description'][:80]}...</div>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+                # 推荐书籍按钮
+                col_rec_read, col_rec_fav = st.columns(2)
+                with col_rec_read:
+                    if st.button(f"📖 开始阅读", key=f"rec_read_{book['title']}", use_container_width=True):
+                        st.session_state.page_rerun += 1
+                        st.session_state.current_book = book['title']
+                        st.session_state.current_content = get_book_content(book['title'])
+                        st.session_state.current_section = "intro"
+                        st.rerun()
+
+                with col_rec_fav:
+                    # 收藏按钮
+                    if 'favorite_books' not in st.session_state:
+                        st.session_state.favorite_books = []
+                    is_fav = book['title'] in st.session_state.favorite_books
+                    fav_emoji = "❤️" if is_fav else "🤍"
+                    if st.button(f"{fav_emoji} 收藏", key=f"rec_fav_{book['title']}", use_container_width=True):
+                        if is_fav:
+                            st.session_state.favorite_books.remove(book['title'])
+                        else:
+                            st.session_state.favorite_books.append(book['title'])
+                        st.rerun()
+
+            st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+
+    # ========== 阅读洞察 ==========
+    insights = get_reading_insights()
+    if insights:
+        with st.expander("💡 阅读洞察与建议", expanded=False):
+            for insight in insights:
+                bg_color = {
+                    "success": "#d4edda",
+                    "info": "#d1ecf1",
+                    "warning": "#fff3cd"
+                }.get(insight["type"], "#f8f9fa")
+
+                text_color = {
+                    "success": "#155724",
+                    "info": "#0c5460",
+                    "warning": "#856404"
+                }.get(insight["type"], "#2D3436")
+
+                st.markdown(f"""
+<div style="background: {bg_color}; padding: 1rem; border-radius: 8px; margin-bottom: 0.75rem; border-left: 4px solid {text_color};">
+    <div style="font-size: 1rem; margin-bottom: 0.25rem;">{insight['icon']} <strong>{insight['title']}</strong></div>
+    <div style="font-size: 0.85rem; color: {text_color};">{insight['message']}</div>
+</div>
+""", unsafe_allow_html=True)
+    # ==========================================
+
     # 显示结果数量
     st.markdown(f'<div style="text-align: center; color: #636E72; font-size: 0.8rem; margin: 1rem 0; padding: 0.5rem; background: linear-gradient(145deg, #f8f9fa 0%, #e8eef2 100%); border-radius: 12px; display: inline-block; width: 100%; box-sizing: border-box;">📚 显示 {len(filtered_books)} 本书</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
@@ -4859,6 +5233,79 @@ def render_sidebar():
                 st.session_state.current_content = None
                 st.session_state.current_section = "library"
                 st.rerun()
+
+        # ========== 云端同步功能 ==========
+        st.markdown('<div style="margin: 1.5rem 0 0.75rem 0;">', unsafe_allow_html=True)
+        st.markdown('<div style="font-size: 0.75rem; font-weight: 600; color: #636E72; margin-bottom: 0.75rem;">☁️ 数据同步</div>', unsafe_allow_html=True)
+
+        with st.expander("💾 备份与同步", expanded=False):
+            st.markdown('<div style="font-size: 0.75rem; color: #636E72; margin-bottom: 0.5rem;">导出数据</div>', unsafe_allow_html=True)
+
+            # 导出按钮
+            if st.button("📤 导出所有数据", key="export_data", use_container_width=True):
+                data = export_all_data()
+                if data:
+                    # 提供下载
+                    import json
+                    json_str = json.dumps(data, ensure_ascii=False, indent=2)
+                    st.download_button(
+                        label="💾 下载备份文件",
+                        data=json_str,
+                        file_name=f"deepread_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                        mime="application/json",
+                        use_container_width=True
+                    )
+                    st.success("✅ 数据已准备好下载！")
+                else:
+                    st.error("❌ 导出失败")
+
+            st.markdown('<div style="margin-top: 1rem; font-size: 0.75rem; color: #636E72; margin-bottom: 0.5rem;">导入数据</div>', unsafe_allow_html=True)
+
+            # 导入功能
+            uploaded_file = st.file_uploader(
+                "选择备份文件",
+                type=['json'],
+                key="import_backup",
+                label_visibility="collapsed"
+            )
+
+            if uploaded_file is not None:
+                try:
+                    import json
+                    data_dict = json.loads(uploaded_file.read().decode('utf-8'))
+
+                    # 选择合并策略
+                    merge_strategy = st.radio(
+                        "合并策略",
+                        ["merge", "replace", "skip"],
+                        format_func=lambda x: {
+                            "merge": "🔄 智能合并（推荐）",
+                            "replace": "🔃 完全覆盖",
+                            "skip": "⏭️ 保留本地"
+                        }[x],
+                        horizontal=True
+                    )
+
+                    col_import, col_cancel = st.columns(2)
+                    with col_import:
+                        if st.button("✅ 确认导入", key="confirm_import", use_container_width=True):
+                            if import_data(data_dict, merge_strategy):
+                                st.success("✅ 数据导入成功！")
+                                st.rerun()
+                            else:
+                                st.error("❌ 导入失败")
+
+                    with col_cancel:
+                        if st.button("❌ 取消", key="cancel_import", use_container_width=True):
+                            st.rerun()
+
+                except Exception as e:
+                    st.error(f"❌ 文件解析失败: {e}")
+
+            st.markdown('<div style="margin-top: 0.75rem; padding: 0.5rem; background: #FFF3CD; border-radius: 6px; font-size: 0.7rem; color: #856404;">', unsafe_allow_html=True)
+            st.markdown('💡 **提示**：定期导出数据可以防止数据丢失。导入时会自动合并冲突数据。', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        # ==========================================
 
         # 底部信息 - 放大文字
         st.markdown("""
