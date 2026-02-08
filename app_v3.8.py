@@ -546,7 +546,7 @@ def download_chinese_font():
 # ==================== 图片生成函数 ====================
 
 def create_quote_card_image(title, author, quote):
-    """生成金句卡片图片 - 简化版本，避免字体错误"""
+    """生成金句卡片图片 - 优化排版和字体"""
     # 小红书头图尺寸：1080x1440 (3:4比例)
     width_inch = 10.8
     height_inch = 14.4
@@ -555,14 +555,13 @@ def create_quote_card_image(title, author, quote):
     # 下载或获取中文字体
     chinese_font_path = download_chinese_font()
 
-    # 设置matplotlib的全局字体（简单方式）
+    # 设置matplotlib的全局字体
     plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial']
     plt.rcParams['axes.unicode_minus'] = False
 
     chinese_available = False
     if chinese_font_path:
         try:
-            # 注册字体
             font_manager.fontManager.addfont(chinese_font_path)
             font_prop = font_manager.FontProperties(fname=chinese_font_path)
             font_name = font_prop.get_name()
@@ -581,51 +580,51 @@ def create_quote_card_image(title, author, quote):
     ax.add_patch(patches.Rectangle((0, 0), 108, 144, facecolor='white', edgecolor='none'))
 
     # 绘制顶部紫色渐变条
-    for y in range(12):
-        alpha = 1 - y / 12
+    for y in range(10):
+        alpha = 1 - y / 10
         ax.add_patch(patches.Rectangle((0, y), 108, 1, facecolor='#667eea', alpha=alpha))
 
     # 绘制柔和的渐变背景（顶部区域）
-    for y in range(12, 25):
-        color_val = 1 - (y - 12) * 0.04
+    for y in range(10, 22):
+        color_val = 1 - (y - 10) * 0.05
         ax.add_patch(patches.Rectangle((0, y), 108, 1, facecolor=(color_val, color_val, min(1, color_val + 0.08))))
 
-    # 绘制标题（不再使用fontproperties参数）
+    # 绘制标题（缩小字体，优化位置）
     if chinese_available:
-        ax.text(54, 17.5, title, fontsize=56, color='#667eea',
+        ax.text(54, 18, title, fontsize=38, color='#667eea',
                 ha='center', va='center', weight='bold')
     else:
-        ax.text(54, 17.5, "QUOTE CARD", fontsize=56, color='#667eea',
+        ax.text(54, 18, "QUOTE CARD", fontsize=38, color='#667eea',
                 ha='center', va='center', weight='bold')
 
-    # 绘制作者
+    # 绘制作者（缩小字体）
     if chinese_available:
-        ax.text(54, 13.5, author, fontsize=36, color='#636E72',
+        ax.text(54, 14.5, author, fontsize=26, color='#636E72',
                 ha='center', va='center')
     else:
-        ax.text(54, 13.5, "By Author", fontsize=36, color='#636E72',
+        ax.text(54, 14.5, "By Author", fontsize=26, color='#636E72',
                 ha='center', va='center')
 
     # 绘制金句背景卡片
-    quote_y = 38
-    quote_height = 80
-    ax.add_patch(patches.FancyBboxPatch((8, quote_y), 100, quote_height,
+    quote_y = 40
+    quote_height = 75
+    ax.add_patch(patches.FancyBboxPatch((8, quote_y), 92, quote_height,
                                         boxstyle="round,pad=3",
                                         facecolor='#F8F9FA',
                                         edgecolor='#667eea', linewidth=0.4))
 
     # 绘制装饰线条
-    ax.plot([14, 22], [quote_y + 70, quote_y + 70], color='#667eea', linewidth=0.8)
-    ax.plot([86, 94], [quote_y + 10, quote_y + 10], color='#667eea', linewidth=0.8)
+    ax.plot([13, 19], [quote_y + 65, quote_y + 65], color='#667eea', linewidth=0.8)
+    ax.plot([89, 95], [quote_y + 10, quote_y + 10], color='#667eea', linewidth=0.8)
 
     # 处理金句文本（分行显示）
     quote_clean = quote.replace('\n', ' ').strip()
 
-    # 简单按字符数分行（每行约16个字符）
+    # 简单按字符数分行（每行约14个字符）
     lines = []
     current_line = ""
     for char in quote_clean:
-        if len(current_line) < 16:
+        if len(current_line) < 14:
             current_line += char
         else:
             lines.append(current_line)
@@ -635,48 +634,48 @@ def create_quote_card_image(title, author, quote):
 
     lines = lines[:4]  # 最多4行
 
-    # 绘制金句文本（垂直居中）
-    line_height = 7.5
+    # 绘制金句文本（垂直居中，调整位置）
+    line_height = 8
     total_height = len(lines) * line_height
-    start_y = quote_y + (quote_height - total_height) / 2 + 3
+    start_y = quote_y + quote_height / 2 + total_height / 2 - 2
 
     if chinese_available:
         for i, line in enumerate(lines):
-            ax.text(54, start_y + i * line_height, line,
-                   fontsize=52, color='#2D3436',
+            ax.text(54, start_y - i * line_height, line,
+                   fontsize=40, color='#2D3436',
                    ha='center', va='center', weight='bold')
     else:
         # 如果中文不可用，显示占位文本
-        ax.text(54, start_y + 2, "Deep Reading",
-               fontsize=52, color='#2D3436',
+        ax.text(54, start_y, "Deep Reading",
+               fontsize=40, color='#2D3436',
                ha='center', va='center', weight='bold')
-        ax.text(54, start_y + 10, "Critical Thinking",
-               fontsize=42, color='#636E72',
+        ax.text(54, start_y - 8, "Critical Thinking",
+               fontsize=32, color='#636E72',
                ha='center', va='center')
 
     # 绘制底部品牌区域
-    brand_y = 128
+    brand_y = 12
 
     # 背景椭圆
-    ellipse = patches.Ellipse((54, brand_y + 6), 12, 12,
+    ellipse = patches.Ellipse((54, brand_y + 4), 10, 8,
                               facecolor='#F8F9FA',
                               edgecolor='#667eea', linewidth=0.4)
     ax.add_patch(ellipse)
 
-    # 品牌文本
+    # 品牌文本（缩小字体）
     if chinese_available:
-        ax.text(54, brand_y + 3, "DeepRead 深读",
-               fontsize=40, color='#667eea',
+        ax.text(54, brand_y + 4, "DeepRead 深读",
+               fontsize=28, color='#667eea',
                ha='center', va='center', weight='bold')
-        ax.text(54, brand_y + 8.5, "深度阅读 · 沉浸思考",
-               fontsize=30, color='#636E72',
+        ax.text(54, brand_y + 1.5, "深度阅读 · 沉浸思考",
+               fontsize=18, color='#636E72',
                ha='center', va='center')
     else:
-        ax.text(54, brand_y + 3, "DeepRead",
-               fontsize=40, color='#667eea',
+        ax.text(54, brand_y + 4, "DeepRead",
+               fontsize=28, color='#667eea',
                ha='center', va='center', weight='bold')
-        ax.text(54, brand_y + 8.5, "Deep Reading",
-               fontsize=30, color='#636E72',
+        ax.text(54, brand_y + 1.5, "Deep Reading",
+               fontsize=18, color='#636E72',
                ha='center', va='center')
 
     # 保存到BytesIO
@@ -735,26 +734,26 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
 
     # Emoji
     try:
-        ax.text(30, y, emoji, fontsize=40, ha='center', va='top')
+        ax.text(30, y, emoji, fontsize=32, ha='center', va='top')
     except:
-        ax.text(30, y, '📖', fontsize=40, ha='center', va='top')
+        ax.text(30, y, '📖', fontsize=32, ha='center', va='top')
     y -= emoji_h
 
-    # 标题
+    # 标题（缩小字体）
     if chinese_available:
-        ax.text(30, y, title, fontsize=32, color='#2D3436',
+        ax.text(30, y, title, fontsize=24, color='#2D3436',
                ha='center', va='top', weight='bold')
     else:
-        ax.text(30, y, "Reading", fontsize=32, color='#2D3436',
+        ax.text(30, y, "Reading", fontsize=24, color='#2D3436',
                ha='center', va='top', weight='bold')
     y -= title_h
 
-    # 作者
+    # 作者（缩小字体）
     if chinese_available:
-        ax.text(30, y, author, fontsize=18, color='#636E72',
+        ax.text(30, y, author, fontsize=14, color='#636E72',
                ha='center', va='top')
     else:
-        ax.text(30, y, "By Author", fontsize=18, color='#636E72',
+        ax.text(30, y, "By Author", fontsize=14, color='#636E72',
                ha='center', va='top')
     y -= author_h + 1
 
@@ -816,12 +815,12 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
     for i, line in enumerate(lines):
         if chinese_available:
             ax.text(30, quote_start_y - i * line_height, line,
-                   fontsize=20, color='#2D3436',
+                   fontsize=16, color='#2D3436',
                    ha='center', va='top', weight='bold')
         else:
             if i == 0:
                 ax.text(30, quote_start_y, "Deep Reading",
-                       fontsize=20, color='#2D3436',
+                       fontsize=16, color='#2D3436',
                        ha='center', va='top', weight='bold')
 
     y = quote_bottom - padding
