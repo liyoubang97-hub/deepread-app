@@ -1618,40 +1618,20 @@ def show_guide_bubble():
         if current_step < len(guide_steps):
             step_info = guide_steps[current_step - 1]
 
-            st.markdown(f"""
-            <div style="
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                z-index: 9999;
-                background: white;
-                padding: 1rem 1.5rem;
-                border-radius: 12px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-                border-left: 4px solid #667eea;
-                max-width: 300px;
-            ">
+            # 使用更简洁的单行HTML格式
+            bubble_html = f"""
+            <div style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; background: white; padding: 1rem 1.5rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); border-left: 4px solid #667eea; max-width: 300px;">
                 <div style="font-size: 1rem; font-weight: 600; color: #2D3436; margin-bottom: 0.5rem;">
                     {step_info['message']}
                 </div>
                 <div style="font-size: 0.85rem; color: #636E72; margin-bottom: 0.75rem;">
                     目标：{step_info['target']}
                 </div>
-                <button onclick="document.querySelector('[data-testid=\"stMarkdownContainer\"]').querySelectorAll('button')[0].click();"
-                        style="
-                            background: #667eea;
-                            color: white;
-                            border: none;
-                            padding: 0.5rem 1rem;
-                            border-radius: 8px;
-                            cursor: pointer;
-                            font-size: 0.9rem;
-                        ">
-                    知道了 →
-                </button>
             </div>
-            """, unsafe_allow_html=True)
+            """
+            st.markdown(bubble_html, unsafe_allow_html=True)
 
+            # 使用Streamlit原生按钮而不是HTML button
             if st.button(f"知道了（{current_step}/3）", key=f"guide_step_{current_step}"):
                 st.session_state.guide_step += 1
                 st.rerun()
@@ -3523,18 +3503,11 @@ def render_reflection(content):
     for idx, question in enumerate(reflection["questions"], 1):
         st.markdown(f'<div class="section-block">', unsafe_allow_html=True)
 
-        # 优雅的问题卡片设计
-        st.markdown(f"""
-<div style="background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
-     border-radius: 16px; padding: 1.5rem;
-     border: 1px solid rgba(102, 126, 234, 0.1);
-     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-     margin-bottom: 1rem;">
+        # 优雅的问题卡片设计 - 使用单行HTML格式
+        question_html = f"""
+<div style="background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%); border-radius: 16px; padding: 1.5rem; border: 1px solid rgba(102, 126, 234, 0.1); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); margin-bottom: 1rem;">
     <div style="display: flex; gap: 1rem; align-items: flex-start;">
-        <div style="background: linear-gradient(145deg, #667eea 0%, #764ba2 100%);
-             color: #ffffff; width: 36px; height: 36px; border-radius: 50%;
-             display: flex; align-items: center; justify-content: center;
-             font-weight: 700; font-size: 1rem; flex-shrink: 0;">
+        <div style="background: linear-gradient(145deg, #667eea 0%, #764ba2 100%); color: #ffffff; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1rem; flex-shrink: 0;">
             {idx}
         </div>
         <div style="flex: 1;">
@@ -3547,7 +3520,8 @@ def render_reflection(content):
         </div>
     </div>
 </div>
-""", unsafe_allow_html=True)
+"""
+        st.markdown(question_html, unsafe_allow_html=True)
 
         # 笔记输入框
         st.markdown('<div style="margin-top: 1rem;">', unsafe_allow_html=True)
@@ -3576,17 +3550,15 @@ def render_reflection(content):
     st.markdown('<div class="subsection-header">值得记住的话</div>', unsafe_allow_html=True)
 
     for quote in content["quotes"]:
-        st.markdown(f"""
-<div style="background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
-     border-left: 4px solid #667eea;
-     padding: 1.5rem; margin-bottom: 1rem;
-     border-radius: 0 12px 12px 0;
-     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);">
+        # 使用单行HTML格式
+        quote_html = f"""
+<div style="background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%); border-left: 4px solid #667eea; padding: 1.5rem; margin-bottom: 1rem; border-radius: 0 12px 12px 0; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);">
     <div style="font-size: 1.1rem; line-height: 1.8; color: #2D3436; font-style: italic; position: relative;">
         {quote}
     </div>
 </div>
-""", unsafe_allow_html=True)
+"""
+        st.markdown(quote_html, unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
