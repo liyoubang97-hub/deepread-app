@@ -584,18 +584,18 @@ def create_quote_card_image(title, author, quote):
 
     # 绘制标题（缩小字体，优化位置）
     if chinese_available:
-        ax.text(54, 18, title, fontsize=38, color='#667eea',
+        ax.text(54, 18, title, fontsize=32, color='#667eea',
                 ha='center', va='center', weight='bold')
     else:
-        ax.text(54, 18, "QUOTE CARD", fontsize=38, color='#667eea',
+        ax.text(54, 18, "QUOTE CARD", fontsize=32, color='#667eea',
                 ha='center', va='center', weight='bold')
 
     # 绘制作者（缩小字体）
     if chinese_available:
-        ax.text(54, 14.5, author, fontsize=26, color='#636E72',
+        ax.text(54, 14.5, author, fontsize=22, color='#636E72',
                 ha='center', va='center')
     else:
-        ax.text(54, 14.5, "By Author", fontsize=26, color='#636E72',
+        ax.text(54, 14.5, "By Author", fontsize=22, color='#636E72',
                 ha='center', va='center')
 
     # 绘制金句背景卡片
@@ -761,9 +761,9 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
         current_x = start_x
 
         for tag in tags[:3]:
-            # 标签背景
+            # 标签背景（使用元组格式）
             ax.add_patch(patches.Rectangle((current_x, y - 3), tag_width, 3.5,
-                                          facecolor='rgba(102, 126, 234, 0.1)',
+                                          facecolor=(102/255, 126/255, 234/255, 0.1),
                                           edgecolor='#667eea', linewidth=0.15))
             try:
                 ax.text(current_x + tag_width / 2, y - 1.5, tag,
@@ -828,7 +828,7 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
     stats_height = 9
 
     ax.add_patch(patches.Rectangle((padding, stats_y_start - stats_height), 60 - 2 * padding, stats_height,
-                                   facecolor='rgba(102, 126, 234, 0.05)',
+                                   facecolor=(102/255, 126/255, 234/255, 0.05),
                                    edgecolor='#667eea', linewidth=0.2))
 
     # Emoji图标
@@ -853,7 +853,7 @@ def create_reading_poster_image(title, author, emoji, tags, quote, stats):
     y = stats_y_start - stats_height - 1.5
 
     ax.add_patch(patches.Rectangle((padding, y - stats_height), 60 - 2 * padding, stats_height,
-                                   facecolor='rgba(118, 75, 162, 0.05)',
+                                   facecolor=(118/255, 75/255, 162/255, 0.05),
                                    edgecolor='#764ba2', linewidth=0.2))
 
     ax.text(padding + 2, y - 3, '⏱️', fontsize=18, va='center')
