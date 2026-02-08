@@ -1562,7 +1562,11 @@ def show_welcome_page():
 
 def show_guide_bubble():
     """显示新手引导气泡"""
-    if not st.session_state.is_first_visit and st.session_state.guide_step < 4:
+    # 已禁用引导功能 - 直接返回
+    return
+
+    # 以下代码不再执行
+    if False and not st.session_state.is_first_visit and st.session_state.guide_step < 4:
 
         guide_steps = [
             {
