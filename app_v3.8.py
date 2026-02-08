@@ -671,7 +671,8 @@ def get_reading_patterns():
 def recommend_books():
     """基于用户数据推荐书籍"""
     try:
-        from lazy_loader import BOOKS_DATA
+        # 使用全局的BOOKS_DATA（在同一文件中定义）
+        global BOOKS_DATA
 
         if not BOOKS_DATA:
             return []
