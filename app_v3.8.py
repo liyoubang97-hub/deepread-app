@@ -582,26 +582,26 @@ def create_quote_card_image(title, author, quote):
     # 绘制顶部紫色纯色条
     ax.add_patch(patches.Rectangle((0, 130), 108, 10, facecolor='#667eea', edgecolor='none'))
 
-    # 绘制金句背景卡片（收窄宽度）
-    quote_y = 100
-    quote_height = 30
+    # 绘制金句背景卡片（原来的位置）
+    quote_y = 40
+    quote_height = 75
     ax.add_patch(patches.FancyBboxPatch((12, quote_y), 84, quote_height,
                                         boxstyle="round,pad=3",
                                         facecolor='#F8F9FA',
                                         edgecolor='#667eea', linewidth=0.4))
 
-    # 绘制装饰线条（调整位置）
-    ax.plot([17, 23], [quote_y + 24, quote_y + 24], color='#667eea', linewidth=0.8)
-    ax.plot([85, 91], [quote_y + 6, quote_y + 6], color='#667eea', linewidth=0.8)
+    # 绘制装饰线条
+    ax.plot([17, 23], [quote_y + 65, quote_y + 65], color='#667eea', linewidth=0.8)
+    ax.plot([85, 91], [quote_y + 10, quote_y + 10], color='#667eea', linewidth=0.8)
 
     # 处理金句文本（分行显示）
     quote_clean = quote.replace('\n', ' ').strip()
 
-    # 简单按字符数分行（每行约10个字符，适应较小的框）
+    # 简单按字符数分行（每行约12个字符）
     lines = []
     current_line = ""
     for char in quote_clean:
-        if len(current_line) < 10:
+        if len(current_line) < 12:
             current_line += char
         else:
             lines.append(current_line)
@@ -609,41 +609,41 @@ def create_quote_card_image(title, author, quote):
     if current_line:
         lines.append(current_line)
 
-    lines = lines[:2]  # 最多2行（适应较小的框）
+    lines = lines[:4]  # 最多4行
 
-    # 绘制金句文本（垂直居中，调整位置）
-    line_height = 6
+    # 绘制金句文本（垂直居中）
+    line_height = 8
     total_height = len(lines) * line_height
-    start_y = quote_y + quote_height / 2 + total_height / 2 - 1
+    start_y = quote_y + quote_height / 2 + total_height / 2 - 2
 
     if chinese_available:
         for i, line in enumerate(lines):
             ax.text(54, start_y - i * line_height, line,
-                   fontsize=28, color='#2D3436',
+                   fontsize=36, color='#2D3436',
                    ha='center', va='center', weight='bold')
     else:
         # 如果中文不可用，显示占位文本
         ax.text(54, start_y, "Deep Reading",
-               fontsize=28, color='#2D3436',
+               fontsize=36, color='#2D3436',
                ha='center', va='center', weight='bold')
-        ax.text(54, start_y - 6, "Critical Thinking",
-               fontsize=22, color='#636E72',
+        ax.text(54, start_y - 8, "Critical Thinking",
+               fontsize=28, color='#636E72',
                ha='center', va='center')
 
     # 绘制标题（在金句框下方）
     if chinese_available:
-        ax.text(54, 22, title, fontsize=26, color='#667eea',
+        ax.text(54, 28, title, fontsize=26, color='#667eea',
                 ha='center', va='center', weight='normal')
     else:
-        ax.text(54, 22, "QUOTE CARD", fontsize=26, color='#667eea',
+        ax.text(54, 28, "QUOTE CARD", fontsize=26, color='#667eea',
                 ha='center', va='center', weight='normal')
 
     # 绘制作者（在标题下方）
     if chinese_available:
-        ax.text(54, 17, author, fontsize=16, color='#636E72',
+        ax.text(54, 23, author, fontsize=16, color='#636E72',
                 ha='center', va='center', style='italic')
     else:
-        ax.text(54, 17, "By Author", fontsize=16, color='#636E72',
+        ax.text(54, 23, "By Author", fontsize=16, color='#636E72',
                 ha='center', va='center', style='italic')
 
     # 绘制底部品牌区域
