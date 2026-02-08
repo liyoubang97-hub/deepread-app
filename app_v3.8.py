@@ -11,7 +11,7 @@ import streamlit as st
 from pathlib import Path
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import base64
@@ -20,6 +20,28 @@ matplotlib.use('Agg')  # 非交互式后端
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib import font_manager
+
+# PDF和Word导出
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    from reportlab.lib import colors
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    PDF_SUPPORT = True
+except ImportError:
+    PDF_SUPPORT = False
+
+try:
+    from docx import Document
+    from docx.shared import Pt, Inches, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    WORD_SUPPORT = True
+except ImportError:
+    WORD_SUPPORT = False
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -1072,6 +1094,32 @@ def init_session_state():
     if "reading_progress" not in st.session_state:
         st.session_state.reading_progress = {}  # 格式: {book_id: {"current_chapter": int, "progress_percent": float, "last_read": datetime}}
 
+    # 用户账户系统（P2功能）
+    if "user_account" not in st.session_state:
+        st.session_state.user_account = {
+            "logged_in": False,          # 是否登录
+            "user_id": None,             # 用户ID
+            "username": None,            # 用户名
+            "email": None,               # 邮箱
+            "created_at": None,          # 注册时间
+            "last_sync": None,           # 最后同步时间
+            "preferences": {             # 用户偏好
+                "theme": "light",        # 主题：light/dark
+                "notification_enabled": True,  # 通知开关
+                "reminder_time": "09:00",    # 提醒时间
+                "export_format": "markdown"   # 默认导出格式
+            }
+        }
+
+    # 智能复习提醒（P2功能）
+    if "review_reminders" not in st.session_state:
+        st.session_state.review_reminders = {
+            "enabled": False,            # 是否启用复习提醒
+            "books_to_review": [],       # 需要复习的书籍列表
+            "review_schedule": {},       # 复习计划: {book_id: review_dates}
+            "last_review_check": None    # 上次检查复习的时间
+        }
+
 
 # ==================== 用户管理相关函数 ====================
 
@@ -1346,6 +1394,136 @@ def get_achievement_progress():
             }
 
     return progress_info
+
+
+def update_reading_progress(book_id, chapter_index, total_chapters):
+    """更新阅读进度"""
+    if book_id not in st.session_state.reading_progress:
+        st.session_state.reading_progress[book_id] = {}
+
+    progress_percent = int((chapter_index / total_chapters) * 100) if total_chapters > 0 else 0
+
+    st.session_state.reading_progress[book_id] = {
+        "current_chapter": chapter_index,
+        "total_chapters": total_chapters,
+        "progress_percent": progress_percent,
+        "last_read": datetime.now()
+    }
+
+
+# ==================== 智能复习提醒系统 ====================
+
+def schedule_review(book_id, book_title):
+    """为已完成的书籍安排复习计划（基于艾宾浩斯遗忘曲线）"""
+    if not st.session_state.review_reminders["enabled"]:
+        return
+
+    # 艾宾浩斯遗忘曲线复习点：1天、3天、7天、15天、30天
+    review_intervals = [1, 3, 7, 15, 30]
+
+    review_dates = []
+    completion_date = datetime.now().date()
+
+    for interval in review_intervals:
+        review_date = completion_date + timedelta(days=interval)
+        review_dates.append({
+            "interval": interval,
+            "date": review_date.strftime("%Y-%m-%d"),
+            "completed": False
+        })
+
+    st.session_state.review_reminders["review_schedule"][book_id] = {
+        "title": book_title,
+        "completion_date": completion_date.strftime("%Y-%m-%d"),
+        "reviews": review_dates
+    }
+
+    # 添加到待复习列表
+    if book_id not in st.session_state.review_reminders["books_to_review"]:
+        st.session_state.review_reminders["books_to_review"].append(book_id)
+
+
+def check_review_reminders():
+    """检查是否有需要复习的书籍"""
+    if not st.session_state.review_reminders["enabled"]:
+        return []
+
+    today = datetime.now().date()
+    due_reviews = []
+
+    for book_id in st.session_state.review_reminders["books_to_review"]:
+        schedule = st.session_state.review_reminders["review_schedule"].get(book_id)
+        if not schedule:
+            continue
+
+        for review in schedule["reviews"]:
+            # 检查是否到期且未完成
+            review_date = datetime.strptime(review["date"], "%Y-%m-%d").date()
+            if review_date <= today and not review["completed"]:
+                due_reviews.append({
+                    "book_id": book_id,
+                    "title": schedule["title"],
+                    "interval": review["interval"],
+                    "date": review["date"]
+                })
+
+    return due_reviews
+
+
+def mark_review_complete(book_id, interval_days):
+    """标记某次复习已完成"""
+    schedule = st.session_state.review_reminders["review_schedule"].get(book_id)
+    if not schedule:
+        return
+
+    for review in schedule["reviews"]:
+        if review["interval"] == interval_days:
+            review["completed"] = True
+            break
+
+    # 检查是否所有复习都已完成
+    all_completed = all(review["completed"] for review in schedule["reviews"])
+    if all_completed:
+        # 从待复习列表中移除
+        if book_id in st.session_state.review_reminders["books_to_review"]:
+            st.session_state.review_reminders["books_to_review"].remove(book_id)
+
+
+def show_review_reminder_panel():
+    """显示复习提醒面板"""
+    if not st.session_state.review_reminders["enabled"]:
+        return
+
+    due_reviews = check_review_reminders()
+
+    if not due_reviews:
+        return
+
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+                padding: 1.5rem; border-radius: 12px; margin: 1rem 0;
+                border-left: 4px solid #f39c12;">
+        <div style="font-size: 1rem; font-weight: 600; color: #2D3436; margin-bottom: 0.5rem;">
+            📚 复习提醒
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    for review in due_reviews:
+        interval_text = {
+            1: "第1次复习（1天后）",
+            3: "第2次复习（3天后）",
+            7: "第3次复习（1周后）",
+            15: "第4次复习（2周后）",
+            30: "第5次复习（1个月后）"
+        }.get(review["interval"], f"{review['interval']}天后")
+
+        st.markdown(f"""
+        <div style="background: #FFF3CD; padding: 1rem; border-radius: 8px; margin-bottom: 0.5rem;">
+            <div style="font-weight: 600; margin-bottom: 0.25rem;">📖 {review['title']}</div>
+            <div style="font-size: 0.85rem; color: #636E72;">{interval_text} - 到期日: {review['date']}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 def update_reading_progress(book_id, chapter_index, total_chapters):
@@ -1807,6 +1985,277 @@ def generate_notes_only(content, notes):
         md += "*还没有填写任何笔记。回到阅读页面填写问题后，即可导出笔记。*\n\n"
 
     return md
+
+
+# ==================== 高级导出功能 ====================
+
+def generate_pdf_bytes(content, notes, include_full_content=True):
+    """生成PDF格式的学习笔记"""
+    if not PDF_SUPPORT:
+        return None
+
+    buffer = BytesIO()
+
+    # 创建PDF文档
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            rightMargin=2*cm, leftMargin=2*cm,
+                            topMargin=2*cm, bottomMargin=2*cm)
+
+    # 样式
+    styles = getSampleStyleSheet()
+
+    # 自定义样式
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=colors.HexColor('#2D3436'),
+        spaceAfter=30,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
+    )
+
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=16,
+        textColor=colors.HexColor('#667eea'),
+        spaceAfter=12,
+        spaceBefore=20,
+        fontName='Helvetica-Bold'
+    )
+
+    normal_style = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontSize=11,
+        textColor=colors.HexColor('#2D3436'),
+        spaceAfter=10,
+        leading=16,
+        fontName='Helvetica'
+    )
+
+    # 构建内容
+    story = []
+
+    # 标题
+    book_title = content["title"]
+    author = content["author"]
+    today = datetime.now().strftime("%Y年%m月%d日")
+
+    story.append(Paragraph(f"{book_title}", title_style))
+    story.append(Spacer(1, 0.3*cm))
+    story.append(Paragraph(f"<b>作者</b>: {author}", normal_style))
+    story.append(Paragraph(f"<b>阅读日期</b>: {today}", normal_style))
+    story.append(Paragraph(f"<b>来源</b>: DeepRead 深度阅读", normal_style))
+    story.append(Spacer(1, 0.5*cm))
+
+    # 分隔线
+    story.append(Spacer(1, 0.3*cm))
+
+    # 如果包含完整内容
+    if include_full_content:
+        # 引言部分
+        story.append(Paragraph("📖 引言", heading_style))
+        intro = content.get("introduction", {})
+        if intro:
+            story.append(Paragraph(f"<b>{intro.get('title', '')}</b>", normal_style))
+            story.append(Paragraph(intro.get('subtitle', ''), normal_style))
+            story.append(Spacer(1, 0.3*cm))
+
+            if intro.get("content"):
+                for para in intro["content"]:
+                    story.append(Paragraph(para, normal_style))
+                    story.append(Spacer(1, 0.2*cm))
+
+        story.append(Spacer(1, 0.5*cm))
+
+        # 核心洞察
+        story.append(Paragraph("💡 核心洞察", heading_style))
+        insights = content.get("insights", {})
+        if insights:
+            story.append(Paragraph(f"<b>{insights.get('title', '')}</b>", normal_style))
+            story.append(Paragraph(insights.get('subtitle', ''), normal_style))
+            story.append(Spacer(1, 0.3*cm))
+
+            if insights.get("key_points"):
+                for idx, point in enumerate(insights["key_points"], 1):
+                    story.append(Paragraph(f"{idx}. {point.get('title', '')}", normal_style))
+                    if point.get("description"):
+                        story.append(Paragraph(point["description"], normal_style))
+                    story.append(Spacer(1, 0.2*cm))
+
+            story.append(Spacer(1, 0.3*cm))
+
+            if insights.get("framework"):
+                story.append(Paragraph("<b>核心框架</b>", normal_style))
+                for item in insights["framework"]:
+                    story.append(Paragraph(f"• {item}", normal_style))
+
+        story.append(Spacer(1, 0.5*cm))
+
+        # 实践行动
+        story.append(Paragraph("✍️ 实践行动", heading_style))
+        practice = content.get("practice", {})
+        if practice:
+            story.append(Paragraph(f"<b>{practice.get('title', '')}</b>", normal_style))
+            story.append(Paragraph(practice.get('subtitle', ''), normal_style))
+            story.append(Spacer(1, 0.3*cm))
+
+            if practice.get("actions"):
+                for idx, action in enumerate(practice["actions"], 1):
+                    story.append(Paragraph(f"<b>步骤 {idx}</b>: {action.get('title', '')}", normal_style))
+                    if action.get("description"):
+                        story.append(Paragraph(action["description"], normal_style))
+                    if action.get("steps"):
+                        for step in action["steps"]:
+                            story.append(Paragraph(f"  • {step}", normal_style))
+                    story.append(Spacer(1, 0.2*cm))
+
+        story.append(PageBreak())
+
+    # 我的思考与反思
+    story.append(Paragraph("🤔 我的思考与反思", heading_style))
+    story.append(Spacer(1, 0.3*cm))
+
+    has_notes = False
+    for idx, question in enumerate(content.get("reflection", {}).get("questions", []), 1):
+        note_key = f"q{idx}"
+        if notes.get(note_key):
+            has_notes = True
+            story.append(Paragraph(f"<b>问题 {idx}</b>", normal_style))
+            story.append(Paragraph(question.get("text", ""), normal_style))
+            story.append(Spacer(1, 0.2*cm))
+            story.append(Paragraph("<b>我的答案</b>:", normal_style))
+            story.append(Paragraph(notes[note_key], normal_style))
+            story.append(Spacer(1, 0.5*cm))
+
+    if not has_notes:
+        story.append(Paragraph("<i>还没有填写任何笔记。</i>", normal_style))
+
+    # 金句摘录
+    if content.get("quotes"):
+        story.append(PageBreak())
+        story.append(Paragraph("💎 值得记住的话", heading_style))
+        story.append(Spacer(1, 0.3*cm))
+        for quote in content["quotes"]:
+            story.append(Paragraph(f"<i>{quote}</i>", normal_style))
+            story.append(Spacer(1, 0.3*cm))
+
+    # 生成PDF
+    doc.build(story)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
+    return pdf_bytes
+
+
+def generate_word_bytes(content, notes, include_full_content=True):
+    """生成Word格式的学习笔记"""
+    if not WORD_SUPPORT:
+        return None
+
+    doc = Document()
+
+    # 设置默认字体
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(11)
+
+    # 标题
+    title = doc.add_heading(content["title"], 0)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # 元信息
+    p = doc.add_paragraph()
+    p.add_run(f"作者: {content['author']}\n")
+    p.add_run(f"阅读日期: {datetime.now().strftime('%Y年%m月%d日')}\n")
+    p.add_run("来源: DeepRead 深度阅读")
+    p.style = 'Normal'
+
+    doc.add_paragraph('─' * 50)
+
+    # 完整内容
+    if include_full_content:
+        # 引言
+        doc.add_heading('📖 引言', 1)
+        intro = content.get("introduction", {})
+        if intro:
+            doc.add_heading(intro.get('title', ''), 2)
+            doc.add_paragraph(intro.get('subtitle', ''))
+
+            if intro.get("content"):
+                for para in intro["content"]:
+                    doc.add_paragraph(para)
+
+        # 核心洞察
+        doc.add_heading('💡 核心洞察', 1)
+        insights = content.get("insights", {})
+        if insights:
+            doc.add_heading(insights.get('title', ''), 2)
+            doc.add_paragraph(insights.get('subtitle', ''))
+
+            if insights.get("key_points"):
+                for idx, point in enumerate(insights["key_points"], 1):
+                    p = doc.add_paragraph(f'{idx}. {point.get("title", "")}', style='List Number')
+                    if point.get("description"):
+                        doc.add_paragraph(point["description"])
+
+            if insights.get("framework"):
+                doc.add_paragraph('核心框架:', style='Heading 3')
+                for item in insights["framework"]:
+                    doc.add_paragraph(item, style='List Bullet')
+
+        # 实践行动
+        doc.add_heading('✍️ 实践行动', 1)
+        practice = content.get("practice", {})
+        if practice:
+            doc.add_heading(practice.get('title', ''), 2)
+            doc.add_paragraph(practice.get('subtitle', ''))
+
+            if practice.get("actions"):
+                for idx, action in enumerate(practice["actions"], 1):
+                    doc.add_heading(f'步骤 {idx}: {action.get("title", "")}', 3)
+                    if action.get("description"):
+                        doc.add_paragraph(action["description"])
+                    if action.get("steps"):
+                        for step in action["steps"]:
+                            doc.add_paragraph(step, style='List Bullet')
+
+        doc.add_page_break()
+
+    # 我的思考
+    doc.add_heading('🤔 我的思考与反思', 1)
+
+    has_notes = False
+    for idx, question in enumerate(content.get("reflection", {}).get("questions", []), 1):
+        note_key = f"q{idx}"
+        if notes.get(note_key):
+            has_notes = True
+            doc.add_heading(f'问题 {idx}', 2)
+            doc.add_paragraph(question.get("text", ""))
+            doc.add_paragraph('我的答案:', style='Heading 3')
+            doc.add_paragraph(notes[note_key])
+
+    if not has_notes:
+        doc.add_paragraph('<i>还没有填写任何笔记。</i>')
+
+    # 金句
+    if content.get("quotes"):
+        doc.add_page_break()
+        doc.add_heading('💎 值得记住的话', 1)
+        for quote in content["quotes"]:
+            p = doc.add_paragraph(quote)
+            p.italic = True
+
+    # 保存到BytesIO
+    buffer = BytesIO()
+    doc.save(buffer)
+    word_bytes = buffer.getvalue()
+    buffer.close()
+
+    return word_bytes
 
 
 def render_library():
@@ -3057,6 +3506,11 @@ def render_reflection(content):
     if current_book and current_book not in st.session_state.reading_stats["total_books_read"]:
         st.session_state.reading_stats["total_books_read"].add(current_book)
 
+        # 安排复习计划（仅在新完成阅读时）
+        book_content = st.session_state.current_content
+        if book_content:
+            schedule_review(current_book, book_content["title"])
+
     # 计算本次阅读时长并累加
     if 'reading_start_time' in st.session_state:
         import time
@@ -3327,55 +3781,143 @@ def render_reflection(content):
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     st.markdown('<div class="section-title">📤 导出学习笔记</div>', unsafe_allow_html=True)
 
-    # 导出选项
-    col1, col2 = st.columns(2)
+    st.markdown('<div style="text-align: center; color: #636E72; font-size: 0.85rem; margin-bottom: 2rem;">选择导出格式，保存你的阅读成果</div>', unsafe_allow_html=True)
 
-    with col1:
-        if st.button("📝 导出我的笔记", key="export_notes", use_container_width=True):
+    # 导出选项卡
+    export_tab1, export_tab2, export_tab3 = st.columns(3)
+
+    with export_tab1:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    padding: 1.5rem; border-radius: 12px; text-align: center; color: white; margin-bottom: 1rem;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📝</div>
+            <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">我的笔记</div>
+            <div style="font-size: 0.75rem; opacity: 0.9;">仅导出个人思考</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("Markdown", key="export_notes_md", use_container_width=True):
             md_content = generate_notes_only(content, st.session_state.notes)
             filename = f"{content['title']}_我的笔记_{datetime.now().strftime('%Y%m%d')}.md"
-
-            # 提供下载
             st.download_button(
-                label="⬇️ 下载笔记文件",
+                label="⬇️ 下载MD文件",
                 data=md_content,
                 file_name=filename,
                 mime="text/markdown",
-                key="download_notes"
+                key="download_notes_md"
             )
 
-            st.markdown("""
-<div class="export-info">
-    <strong>💡 如何导入飞书？</strong><br/>
-    1. 下载文件后，打开飞书文档<br/>
-    2. 选择"导入" → "Markdown"<br/>
-    3. 选择下载的文件即可
-</div>
-""", unsafe_allow_html=True)
+        # Word导出
+        if WORD_SUPPORT:
+            if st.button("Word文档", key="export_notes_word", use_container_width=True):
+                word_bytes = generate_word_bytes(content, st.session_state.notes, include_full_content=False)
+                if word_bytes:
+                    filename = f"{content['title']}_我的笔记_{datetime.now().strftime('%Y%m%d')}.docx"
+                    st.download_button(
+                        label="⬇️ 下载Word文件",
+                        data=word_bytes,
+                        file_name=filename,
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key="download_notes_word"
+                    )
+        else:
+            st.info("💡 安装python-docx库以支持Word导出")
 
-    with col2:
-        if st.button("📚 导出完整笔记", key="export_full", use_container_width=True):
+        # PDF导出
+        if PDF_SUPPORT:
+            if st.button("PDF文档", key="export_notes_pdf", use_container_width=True):
+                pdf_bytes = generate_pdf_bytes(content, st.session_state.notes, include_full_content=False)
+                if pdf_bytes:
+                    filename = f"{content['title']}_我的笔记_{datetime.now().strftime('%Y%m%d')}.pdf"
+                    st.download_button(
+                        label="⬇️ 下载PDF文件",
+                        data=pdf_bytes,
+                        file_name=filename,
+                        mime="application/pdf",
+                        key="download_notes_pdf"
+                    )
+        else:
+            st.info("💡 安装reportlab库以支持PDF导出")
+
+    with export_tab2:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                    padding: 1.5rem; border-radius: 12px; text-align: center; color: white; margin-bottom: 1rem;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📚</div>
+            <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">完整笔记</div>
+            <div style="font-size: 0.75rem; opacity: 0.9;">包含所有内容</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("Markdown", key="export_full_md", use_container_width=True):
             md_content = generate_markdown(content, st.session_state.notes)
             filename = f"{content['title']}_完整学习笔记_{datetime.now().strftime('%Y%m%d')}.md"
-
-            # 提供下载
             st.download_button(
-                label="⬇️ 下载完整笔记",
+                label="⬇️ 下载MD文件",
                 data=md_content,
                 file_name=filename,
                 mime="text/markdown",
-                key="download_full"
+                key="download_full_md"
             )
 
-            st.markdown("""
-<div class="export-info">
-    <strong>💡 完整笔记包含：</strong><br/>
-    • 书籍核心内容<br/>
-    • 实践步骤<br/>
-    • 你的思考笔记<br/>
-    • 金句摘录
-</div>
-""", unsafe_allow_html=True)
+        # Word导出
+        if WORD_SUPPORT:
+            if st.button("Word文档", key="export_full_word", use_container_width=True):
+                word_bytes = generate_word_bytes(content, st.session_state.notes, include_full_content=True)
+                if word_bytes:
+                    filename = f"{content['title']}_完整学习笔记_{datetime.now().strftime('%Y%m%d')}.docx"
+                    st.download_button(
+                        label="⬇️ 下载Word文件",
+                        data=word_bytes,
+                        file_name=filename,
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key="download_full_word"
+                    )
+        else:
+            st.info("💡 安装python-docx库")
+
+        # PDF导出
+        if PDF_SUPPORT:
+            if st.button("PDF文档", key="export_full_pdf", use_container_width=True):
+                pdf_bytes = generate_pdf_bytes(content, st.session_state.notes, include_full_content=True)
+                if pdf_bytes:
+                    filename = f"{content['title']}_完整学习笔记_{datetime.now().strftime('%Y%m%d')}.pdf"
+                    st.download_button(
+                        label="⬇️ 下载PDF文件",
+                        data=pdf_bytes,
+                        file_name=filename,
+                        mime="application/pdf",
+                        key="download_full_pdf"
+                    )
+        else:
+            st.info("💡 安装reportlab库")
+
+    with export_tab3:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+                    padding: 1.5rem; border-radius: 12px; text-align: center; color: white; margin-bottom: 1rem;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+            <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">使用指南</div>
+            <div style="font-size: 0.75rem; opacity: 0.9;">导出说明</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <div style="background: #F8F9FA; padding: 1.5rem; border-radius: 12px; font-size: 0.85rem; line-height: 1.8;">
+            <div style="margin-bottom: 1rem;">
+                <strong>📝 Markdown (.md)</strong><br/>
+                适合导入飞书、Notion等笔记软件
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <strong>📄 Word (.docx)</strong><br/>
+                适合编辑和分享，格式完整
+            </div>
+            <div>
+                <strong>📕 PDF (.pdf)</strong><br/>
+                适合打印和归档，格式固定
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     # 完成阅读
     st.markdown('<div class="nav-container">', unsafe_allow_html=True)
@@ -3987,6 +4529,9 @@ def main():
 
     # 显示成就解锁通知
     show_achievement_notifications()
+
+    # 显示复习提醒面板
+    show_review_reminder_panel()
 
     # 显示新手引导气泡
     show_guide_bubble()
