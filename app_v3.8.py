@@ -582,42 +582,42 @@ def create_quote_card_image(title, author, quote):
     # 绘制顶部紫色纯色条
     ax.add_patch(patches.Rectangle((0, 130), 108, 10, facecolor='#667eea', edgecolor='none'))
 
-    # 绘制标题（缩小字体，优化位置）
+    # 绘制标题（缩小字体，优化位置，往上移）
     if chinese_available:
-        ax.text(54, 18, title, fontsize=32, color='#667eea',
+        ax.text(54, 20, title, fontsize=32, color='#667eea',
                 ha='center', va='center', weight='bold')
     else:
-        ax.text(54, 18, "QUOTE CARD", fontsize=32, color='#667eea',
+        ax.text(54, 20, "QUOTE CARD", fontsize=32, color='#667eea',
                 ha='center', va='center', weight='bold')
 
-    # 绘制作者（缩小字体）
+    # 绘制作者（缩小字体，往上移）
     if chinese_available:
-        ax.text(54, 14.5, author, fontsize=22, color='#636E72',
+        ax.text(54, 16.5, author, fontsize=22, color='#636E72',
                 ha='center', va='center')
     else:
-        ax.text(54, 14.5, "By Author", fontsize=22, color='#636E72',
+        ax.text(54, 16.5, "By Author", fontsize=22, color='#636E72',
                 ha='center', va='center')
 
-    # 绘制金句背景卡片
+    # 绘制金句背景卡片（收窄宽度）
     quote_y = 40
     quote_height = 75
-    ax.add_patch(patches.FancyBboxPatch((8, quote_y), 92, quote_height,
+    ax.add_patch(patches.FancyBboxPatch((12, quote_y), 84, quote_height,
                                         boxstyle="round,pad=3",
                                         facecolor='#F8F9FA',
                                         edgecolor='#667eea', linewidth=0.4))
 
-    # 绘制装饰线条
-    ax.plot([13, 19], [quote_y + 65, quote_y + 65], color='#667eea', linewidth=0.8)
-    ax.plot([89, 95], [quote_y + 10, quote_y + 10], color='#667eea', linewidth=0.8)
+    # 绘制装饰线条（调整位置）
+    ax.plot([17, 23], [quote_y + 65, quote_y + 65], color='#667eea', linewidth=0.8)
+    ax.plot([85, 91], [quote_y + 10, quote_y + 10], color='#667eea', linewidth=0.8)
 
     # 处理金句文本（分行显示）
     quote_clean = quote.replace('\n', ' ').strip()
 
-    # 简单按字符数分行（每行约14个字符）
+    # 简单按字符数分行（每行约12个字符，收窄后）
     lines = []
     current_line = ""
     for char in quote_clean:
-        if len(current_line) < 14:
+        if len(current_line) < 12:
             current_line += char
         else:
             lines.append(current_line)
@@ -635,15 +635,15 @@ def create_quote_card_image(title, author, quote):
     if chinese_available:
         for i, line in enumerate(lines):
             ax.text(54, start_y - i * line_height, line,
-                   fontsize=40, color='#2D3436',
+                   fontsize=36, color='#2D3436',
                    ha='center', va='center', weight='bold')
     else:
         # 如果中文不可用，显示占位文本
         ax.text(54, start_y, "Deep Reading",
-               fontsize=40, color='#2D3436',
+               fontsize=36, color='#2D3436',
                ha='center', va='center', weight='bold')
         ax.text(54, start_y - 8, "Critical Thinking",
-               fontsize=32, color='#636E72',
+               fontsize=28, color='#636E72',
                ha='center', va='center')
 
     # 绘制底部品牌区域
