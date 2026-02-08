@@ -1543,43 +1543,8 @@ def update_reading_progress(book_id, chapter_index, total_chapters):
 
 def show_welcome_page():
     """显示首次访问欢迎页"""
-    # 使用更稳定的HTML格式
-    html_content = """
-    <div style="text-align: center; padding: 4rem 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; margin: 2rem 0; color: white;">
-        <h1 style="font-family: 'Noto Serif SC', serif; font-size: 3rem; font-weight: 700; margin: 0 0 1rem 0; color: white;">
-            开始你的深度阅读之旅 🧠
-        </h1>
-
-        <p style="font-size: 1.2rem; margin: 0 0 2rem 0; opacity: 0.95;">
-            不只是阅读，更是深度思考和行动
-        </p>
-
-        <div style="display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; margin: 2rem 0;">
-            <div style="flex: 1; min-width: 200px; padding: 1.5rem;">
-                <div style="font-size: 3rem; margin-bottom: 0.5rem;">📖</div>
-                <div style="font-size: 1.1rem; font-weight: 600;">精选书籍</div>
-                <div style="font-size: 0.9rem; opacity: 0.85;">个人成长 · 认知提升</div>
-            </div>
-
-            <div style="flex: 1; min-width: 200px; padding: 1.5rem;">
-                <div style="font-size: 3rem; margin-bottom: 0.5rem;">🎯</div>
-                <div style="font-size: 1.1rem; font-weight: 600;">实践追踪</div>
-                <div style="font-size: 0.9rem; opacity: 0.85;">30天习惯养成</div>
-            </div>
-
-            <div style="flex: 1; min-width: 200px; padding: 1.5rem;">
-                <div style="font-size: 3rem; margin-bottom: 0.5rem;">💡</div>
-                <div style="font-size: 1.1rem; font-weight: 600;">深度思考</div>
-                <div style="font-size: 0.9rem; opacity: 0.85;">反思与输出</div>
-            </div>
-        </div>
-
-        <div style="background: rgba(255, 255, 255, 0.15); padding: 1rem 2rem; border-radius: 12px; margin: 2rem 0;">
-            <div style="font-size: 1.2rem; margin-bottom: 0.5rem;">🎁 7天深度版免费试用</div>
-            <div style="font-size: 0.95rem; opacity: 0.9;">云同步 · 数据统计 · 智能推荐</div>
-        </div>
-    </div>
-    """
+    # 使用更稳定的单行HTML格式
+    html_content = '<div style="text-align: center; padding: 4rem 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; margin: 2rem 0; color: white;"><h1 style="font-family: \'Noto Serif SC\', serif; font-size: 3rem; font-weight: 700; margin: 0 0 1rem 0; color: white;">开始你的深度阅读之旅 🧠</h1><p style="font-size: 1.2rem; margin: 0 0 2rem 0; opacity: 0.95;">不只是阅读，更是深度思考和行动</p><div style="display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; margin: 2rem 0;"><div style="flex: 1; min-width: 200px; padding: 1.5rem;"><div style="font-size: 3rem; margin-bottom: 0.5rem;">📖</div><div style="font-size: 1.1rem; font-weight: 600;">精选书籍</div><div style="font-size: 0.9rem; opacity: 0.85;">个人成长 · 认知提升</div></div><div style="flex: 1; min-width: 200px; padding: 1.5rem;"><div style="font-size: 3rem; margin-bottom: 0.5rem;">🎯</div><div style="font-size: 1.1rem; font-weight: 600;">实践追踪</div><div style="font-size: 0.9rem; opacity: 0.85;">30天习惯养成</div></div><div style="flex: 1; min-width: 200px; padding: 1.5rem;"><div style="font-size: 3rem; margin-bottom: 0.5rem;">💡</div><div style="font-size: 1.1rem; font-weight: 600;">深度思考</div><div style="font-size: 0.9rem; opacity: 0.85;">反思与输出</div></div></div><div style="background: rgba(255, 255, 255, 0.15); padding: 1rem 2rem; border-radius: 12px; margin: 2rem 0;"><div style="font-size: 1.2rem; margin-bottom: 0.5rem;">🎁 7天深度版免费试用</div><div style="font-size: 0.95rem; opacity: 0.9;">云同步 · 数据统计 · 智能推荐</div></div></div>'
 
     st.markdown(html_content, unsafe_allow_html=True)
 
@@ -2449,7 +2414,7 @@ def render_book_card(book, center=False):
 
     # 按钮行 - 收藏和阅读
     if book["available"]:
-        col_fav, col_read = st.columns([1, 5])
+        col_fav, col_read, col_del = st.columns([1, 4, 1])
 
         with col_fav:
             if st.button(fav_emoji, key=f"fav_{book['title']}", help=fav_title):
@@ -2466,6 +2431,30 @@ def render_book_card(book, center=False):
                 st.session_state.current_content = get_book_content(book['title'])
                 st.session_state.current_section = "intro"
                 st.rerun()
+
+        with col_del:
+            if st.button("🗑️", key=f"del_{book['title']}", help="删除书籍"):
+                # 确认删除
+                if f"confirm_del_{book['title']}" not in st.session_state:
+                    st.session_state[f"confirm_del_{book['title']}"] = False
+
+                if st.session_state[f"confirm_del_{book['title']}"]:
+                    # 执行删除 - 从BOOKS_DATA中移除（通过标记为unavailable）
+                    for b in BOOKS_DATA:
+                        if b['title'] == book['title']:
+                            b['available'] = False
+                            break
+                    st.success(f"已删除《{book['title']}》")
+                    st.rerun()
+                else:
+                    st.session_state[f"confirm_del_{book['title']}"] = True
+                    st.rerun()
+
+                # 如果在确认状态，显示取消按钮
+                if st.session_state[f"confirm_del_{book['title']}"]:
+                    if st.button("取消", key=f"cancel_del_{book['title']}", use_container_width=True):
+                        st.session_state[f"confirm_del_{book['title']}"] = False
+                        st.rerun()
     else:
         st.markdown(f'<div style="text-align: center; color: #636E72; font-size: 0.75rem; font-style: italic; margin-top: 0.5rem;">即将推出</div>', unsafe_allow_html=True)
 
@@ -3587,11 +3576,7 @@ def render_reflection(content):
         st.markdown(card_html, unsafe_allow_html=True)
 
         # 提示信息
-        st.markdown("""
-        <div style="text-align: center; color: #636E72; font-size: 0.85rem; margin: 1rem 0;">
-            💡 提示：如果下载的图片中文显示不正确，请直接截图上方卡片
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div style="text-align: center; color: #636E72; font-size: 0.85rem; margin: 1rem 0;">💡 提示：如果下载的图片中文显示不正确，请直接截图上方卡片</div>', unsafe_allow_html=True)
 
         # 下载图片按钮
         img_data = create_quote_card_image(content['title'], content['author'], selected_quote)
@@ -3667,11 +3652,7 @@ def render_reflection(content):
         st.markdown(poster_html, unsafe_allow_html=True)
 
         # 提示信息
-        st.markdown("""
-        <div style="text-align: center; color: #636E72; font-size: 0.85rem; margin: 1rem 0;">
-            💡 提示：如果下载的图片中文显示不正确，请直接截图上方海报
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div style="text-align: center; color: #636E72; font-size: 0.85rem; margin: 1rem 0;">💡 提示：如果下载的图片中文显示不正确，请直接截图上方海报</div>', unsafe_allow_html=True)
 
         # 下载图片按钮
         poster_stats = {
@@ -3719,13 +3700,7 @@ def render_reflection(content):
 👉 一起读书成长吧！
 """
 
-        st.markdown(f"""
-<div style="background: #F8F9FA; border-left: 4px solid #667eea; padding: 1.5rem; border-radius: 8px; margin: 1rem 0;">
-    <div style="font-size: 0.9rem; color: #636E72; margin-bottom: 0.75rem; font-weight: 600;">📋 分享文案（可复制）</div>
-    <div style="font-size: 0.85rem; line-height: 1.8; color: #2D3436; white-space: pre-wrap; font-family: 'Noto Serif SC', serif; background: #ffffff; padding: 1rem; border-radius: 6px; border: 1px solid #E8EEF2;">{share_text}</div>
-    <div style="font-size: 0.8rem; color: #636E72; margin-top: 0.75rem; font-style: italic;">💡 复制上方文字，分享到朋友圈、微博、小红书等平台</div>
-</div>
-""", unsafe_allow_html=True)
+        st.markdown(f'<div style="background: #F8F9FA; border-left: 4px solid #667eea; padding: 1.5rem; border-radius: 8px; margin: 1rem 0;"><div style="font-size: 0.9rem; color: #636E72; margin-bottom: 0.75rem; font-weight: 600;">📋 分享文案（可复制）</div><div style="font-size: 0.85rem; line-height: 1.8; color: #2D3436; white-space: pre-wrap; font-family: \'Noto Serif SC\', serif; background: #ffffff; padding: 1rem; border-radius: 6px; border: 1px solid #E8EEF2;">{share_text}</div><div style="font-size: 0.8rem; color: #636E72; margin-top: 0.75rem; font-style: italic;">💡 复制上方文字，分享到朋友圈、微博、小红书等平台</div></div>', unsafe_allow_html=True)
     # ============================================
 
     # 导出功能区
@@ -3738,14 +3713,7 @@ def render_reflection(content):
     export_tab1, export_tab2, export_tab3 = st.columns(3)
 
     with export_tab1:
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    padding: 1.5rem; border-radius: 12px; text-align: center; color: white; margin-bottom: 1rem;">
-            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📝</div>
-            <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">我的笔记</div>
-            <div style="font-size: 0.75rem; opacity: 0.9;">仅导出个人思考</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem; border-radius: 12px; text-align: center; color: white; margin-bottom: 1rem;"><div style="font-size: 2rem; margin-bottom: 0.5rem;">📝</div><div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">我的笔记</div><div style="font-size: 0.75rem; opacity: 0.9;">仅导出个人思考</div></div>', unsafe_allow_html=True)
 
         if st.button("Markdown", key="export_notes_md", use_container_width=True):
             md_content = generate_notes_only(content, st.session_state.notes)
@@ -3791,14 +3759,7 @@ def render_reflection(content):
             st.info("💡 安装reportlab库以支持PDF导出")
 
     with export_tab2:
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                    padding: 1.5rem; border-radius: 12px; text-align: center; color: white; margin-bottom: 1rem;">
-            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📚</div>
-            <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">完整笔记</div>
-            <div style="font-size: 0.75rem; opacity: 0.9;">包含所有内容</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 1.5rem; border-radius: 12px; text-align: center; color: white; margin-bottom: 1rem;"><div style="font-size: 2rem; margin-bottom: 0.5rem;">📚</div><div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">完整笔记</div><div style="font-size: 0.75rem; opacity: 0.9;">包含所有内容</div></div>', unsafe_allow_html=True)
 
         if st.button("Markdown", key="export_full_md", use_container_width=True):
             md_content = generate_markdown(content, st.session_state.notes)
@@ -3844,31 +3805,9 @@ def render_reflection(content):
             st.info("💡 安装reportlab库")
 
     with export_tab3:
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-                    padding: 1.5rem; border-radius: 12px; text-align: center; color: white; margin-bottom: 1rem;">
-            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
-            <div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">使用指南</div>
-            <div style="font-size: 0.75rem; opacity: 0.9;">导出说明</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 1.5rem; border-radius: 12px; text-align: center; color: white; margin-bottom: 1rem;"><div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div><div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">使用指南</div><div style="font-size: 0.75rem; opacity: 0.9;">导出说明</div></div>', unsafe_allow_html=True)
 
-        st.markdown("""
-        <div style="background: #F8F9FA; padding: 1.5rem; border-radius: 12px; font-size: 0.85rem; line-height: 1.8;">
-            <div style="margin-bottom: 1rem;">
-                <strong>📝 Markdown (.md)</strong><br/>
-                适合导入飞书、Notion等笔记软件
-            </div>
-            <div style="margin-bottom: 1rem;">
-                <strong>📄 Word (.docx)</strong><br/>
-                适合编辑和分享，格式完整
-            </div>
-            <div>
-                <strong>📕 PDF (.pdf)</strong><br/>
-                适合打印和归档，格式固定
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div style="background: #F8F9FA; padding: 1.5rem; border-radius: 12px; font-size: 0.85rem; line-height: 1.8;"><div style="margin-bottom: 1rem;"><strong>📝 Markdown (.md)</strong><br/>适合导入飞书、Notion等笔记软件</div><div style="margin-bottom: 1rem;"><strong>📄 Word (.docx)</strong><br/>适合编辑和分享，格式完整</div><div><strong>📕 PDF (.pdf)</strong><br/>适合打印和归档，格式固定</div></div>', unsafe_allow_html=True)
 
     # 完成阅读
     st.markdown('<div class="nav-container">', unsafe_allow_html=True)
