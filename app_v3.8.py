@@ -582,20 +582,20 @@ def create_quote_card_image(title, author, quote):
     # 绘制顶部紫色纯色条
     ax.add_patch(patches.Rectangle((0, 130), 108, 10, facecolor='#667eea', edgecolor='none'))
 
-    # 绘制标题（缩小字体，优化位置，往上移）
+    # 绘制标题（进一步上移并缩小字体）
     if chinese_available:
-        ax.text(54, 20, title, fontsize=32, color='#667eea',
+        ax.text(54, 23, title, fontsize=28, color='#667eea',
                 ha='center', va='center', weight='bold')
     else:
-        ax.text(54, 20, "QUOTE CARD", fontsize=32, color='#667eea',
+        ax.text(54, 23, "QUOTE CARD", fontsize=28, color='#667eea',
                 ha='center', va='center', weight='bold')
 
-    # 绘制作者（缩小字体，往上移）
+    # 绘制作者（进一步上移并缩小字体）
     if chinese_available:
-        ax.text(54, 16.5, author, fontsize=22, color='#636E72',
+        ax.text(54, 19.5, author, fontsize=18, color='#636E72',
                 ha='center', va='center')
     else:
-        ax.text(54, 16.5, "By Author", fontsize=22, color='#636E72',
+        ax.text(54, 19.5, "By Author", fontsize=18, color='#636E72',
                 ha='center', va='center')
 
     # 绘制金句背景卡片（收窄宽度）
