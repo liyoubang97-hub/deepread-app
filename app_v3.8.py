@@ -3698,111 +3698,36 @@ def render_reflection(content):
         st.markdown(f'<div style="background: #F8F9FA; border-left: 4px solid #667eea; padding: 1.5rem; border-radius: 8px; margin: 1rem 0;"><div style="font-size: 0.9rem; color: #636E72; margin-bottom: 0.75rem; font-weight: 600;">📋 分享文案（可复制）</div><div style="font-size: 0.85rem; line-height: 1.8; color: #2D3436; white-space: pre-wrap; font-family: \'Noto Serif SC\', serif; background: #ffffff; padding: 1rem; border-radius: 6px; border: 1px solid #E8EEF2;">{share_text}</div><div style="font-size: 0.8rem; color: #636E72; margin-top: 0.75rem; font-style: italic;">💡 复制上方文字，分享到朋友圈、微博、小红书等平台</div></div>', unsafe_allow_html=True)
     # ============================================
 
-    # 导出功能区
+    # 导出功能区 - 简化版
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     st.markdown('<div class="section-title">📤 导出学习笔记</div>', unsafe_allow_html=True)
 
-    st.markdown('<div style="text-align: center; color: #636E72; font-size: 0.85rem; margin-bottom: 2rem;">选择导出格式，保存你的阅读成果</div>', unsafe_allow_html=True)
+    # 选择导出类型
+    col1, col2 = st.columns(2)
 
-    # 导出选项卡
-    export_tab1, export_tab2, export_tab3 = st.columns(3)
-
-    with export_tab1:
-        st.markdown('<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem; border-radius: 12px; text-align: center; color: white; margin-bottom: 1rem;"><div style="font-size: 2rem; margin-bottom: 0.5rem;">📝</div><div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">我的笔记</div><div style="font-size: 0.75rem; opacity: 0.9;">仅导出个人思考</div></div>', unsafe_allow_html=True)
-
-        if st.button("Markdown", key="export_notes_md", use_container_width=True):
+    with col1:
+        if st.button("📝 导出我的笔记", use_container_width=True):
             md_content = generate_notes_only(content, st.session_state.notes)
             filename = f"{content['title']}_我的笔记_{datetime.now().strftime('%Y%m%d')}.md"
             st.download_button(
-                label="⬇️ 下载MD文件",
+                label="⬇️ 下载笔记文件",
                 data=md_content,
                 file_name=filename,
                 mime="text/markdown",
-                key="download_notes_md"
+                key="download_notes"
             )
 
-        # Word导出
-        if WORD_SUPPORT:
-            if st.button("Word文档", key="export_notes_word", use_container_width=True):
-                word_bytes = generate_word_bytes(content, st.session_state.notes, include_full_content=False)
-                if word_bytes:
-                    filename = f"{content['title']}_我的笔记_{datetime.now().strftime('%Y%m%d')}.docx"
-                    st.download_button(
-                        label="⬇️ 下载Word文件",
-                        data=word_bytes,
-                        file_name=filename,
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key="download_notes_word"
-                    )
-        else:
-            st.info("💡 安装python-docx库以支持Word导出")
-
-        # PDF导出
-        if PDF_SUPPORT:
-            if st.button("PDF文档", key="export_notes_pdf", use_container_width=True):
-                pdf_bytes = generate_pdf_bytes(content, st.session_state.notes, include_full_content=False)
-                if pdf_bytes:
-                    filename = f"{content['title']}_我的笔记_{datetime.now().strftime('%Y%m%d')}.pdf"
-                    st.download_button(
-                        label="⬇️ 下载PDF文件",
-                        data=pdf_bytes,
-                        file_name=filename,
-                        mime="application/pdf",
-                        key="download_notes_pdf"
-                    )
-        else:
-            st.info("💡 安装reportlab库以支持PDF导出")
-
-    with export_tab2:
-        st.markdown('<div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 1.5rem; border-radius: 12px; text-align: center; color: white; margin-bottom: 1rem;"><div style="font-size: 2rem; margin-bottom: 0.5rem;">📚</div><div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">完整笔记</div><div style="font-size: 0.75rem; opacity: 0.9;">包含所有内容</div></div>', unsafe_allow_html=True)
-
-        if st.button("Markdown", key="export_full_md", use_container_width=True):
+    with col2:
+        if st.button("📚 导出完整笔记", use_container_width=True):
             md_content = generate_markdown(content, st.session_state.notes)
             filename = f"{content['title']}_完整学习笔记_{datetime.now().strftime('%Y%m%d')}.md"
             st.download_button(
-                label="⬇️ 下载MD文件",
+                label="⬇️ 下载完整笔记",
                 data=md_content,
                 file_name=filename,
                 mime="text/markdown",
-                key="download_full_md"
+                key="download_full"
             )
-
-        # Word导出
-        if WORD_SUPPORT:
-            if st.button("Word文档", key="export_full_word", use_container_width=True):
-                word_bytes = generate_word_bytes(content, st.session_state.notes, include_full_content=True)
-                if word_bytes:
-                    filename = f"{content['title']}_完整学习笔记_{datetime.now().strftime('%Y%m%d')}.docx"
-                    st.download_button(
-                        label="⬇️ 下载Word文件",
-                        data=word_bytes,
-                        file_name=filename,
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key="download_full_word"
-                    )
-        else:
-            st.info("💡 安装python-docx库")
-
-        # PDF导出
-        if PDF_SUPPORT:
-            if st.button("PDF文档", key="export_full_pdf", use_container_width=True):
-                pdf_bytes = generate_pdf_bytes(content, st.session_state.notes, include_full_content=True)
-                if pdf_bytes:
-                    filename = f"{content['title']}_完整学习笔记_{datetime.now().strftime('%Y%m%d')}.pdf"
-                    st.download_button(
-                        label="⬇️ 下载PDF文件",
-                        data=pdf_bytes,
-                        file_name=filename,
-                        mime="application/pdf",
-                        key="download_full_pdf"
-                    )
-        else:
-            st.info("💡 安装reportlab库")
-
-    with export_tab3:
-        st.markdown('<div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 1.5rem; border-radius: 12px; text-align: center; color: white; margin-bottom: 1rem;"><div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div><div style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">使用指南</div><div style="font-size: 0.75rem; opacity: 0.9;">导出说明</div></div>', unsafe_allow_html=True)
-
-        st.markdown('<div style="background: #F8F9FA; padding: 1.5rem; border-radius: 12px; font-size: 0.85rem; line-height: 1.8;"><div style="margin-bottom: 1rem;"><strong>📝 Markdown (.md)</strong><br/>适合导入飞书、Notion等笔记软件</div><div style="margin-bottom: 1rem;"><strong>📄 Word (.docx)</strong><br/>适合编辑和分享，格式完整</div><div><strong>📕 PDF (.pdf)</strong><br/>适合打印和归档，格式固定</div></div>', unsafe_allow_html=True)
 
     # 完成阅读
     st.markdown('<div class="nav-container">', unsafe_allow_html=True)
