@@ -18,6 +18,7 @@ import base64
 import sqlite3
 import json
 import os
+import requests
 import matplotlib
 matplotlib.use('Agg')  # 非交互式后端
 import matplotlib.pyplot as plt
@@ -499,6 +500,156 @@ def import_data(data_dict, merge_strategy="merge"):
     except Exception as e:
         st.error(f"导入数据失败: {e}")
         return False
+
+
+# ==================== 云端自动同步客户端 ====================
+
+# 云端同步服务器配置
+CLOUD_SYNC_SERVER = os.getenv("CLOUD_SYNC_SERVER", "http://localhost:8000")
+
+
+def auto_sync_to_cloud():
+    """自动同步数据到云端服务器"""
+    try:
+        # 检查是否启用了云端同步
+        if not st.session_state.get("cloud_sync_enabled", False):
+            return False
+
+        # 检查是否有用户token
+        cloud_token = st.session_state.get("cloud_sync_token")
+        if not cloud_token:
+            return False
+
+        # 准备同步数据
+        data = export_all_data()
+        if not data:
+            return False
+
+        # 添加用户名到数据（临时认证方案）
+        data["username"] = st.session_state.get("cloud_sync_username", "anonymous")
+
+        # 发送到云端服务器
+        response = requests.post(
+            f"{CLOUD_SYNC_SERVER}/api/sync/push",
+            json={
+                "token": cloud_token,
+                "data": data,
+                "client_version": "3.8"
+            },
+            timeout=5
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            if result.get("success"):
+                # 更新最后同步时间
+                st.session_state["last_cloud_sync"] = datetime.now().isoformat()
+                return True
+
+        return False
+
+    except Exception as e:
+        # 静默失败，不影响用户体验
+        print(f"云端同步失败: {e}")
+        return False
+
+
+def auto_sync_from_cloud():
+    """自动从云端服务器拉取数据"""
+    try:
+        # 检查是否启用了云端同步
+        if not st.session_state.get("cloud_sync_enabled", False):
+            return False
+
+        # 检查是否有用户token
+        cloud_token = st.session_state.get("cloud_sync_token")
+        if not cloud_token:
+            return False
+
+        # 从云端服务器拉取
+        response = requests.post(
+            f"{CLOUD_SYNC_SERVER}/api/sync/pull",
+            json={
+                "token": cloud_token
+            },
+            timeout=5
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            if result.get("success") and result.get("data"):
+                # 导入数据（使用智能合并策略）
+                imported = import_data(result["data"], merge_strategy="merge")
+                if imported:
+                    # 更新最后同步时间
+                    st.session_state["last_cloud_sync"] = datetime.now().isoformat()
+                    return True
+
+        return False
+
+    except Exception as e:
+        # 静默失败，不影响用户体验
+        print(f"云端拉取失败: {e}")
+        return False
+
+
+def test_cloud_connection():
+    """测试云端服务器连接"""
+    try:
+        response = requests.get(f"{CLOUD_SYNC_SERVER}/api/sync/status", timeout=3)
+        if response.status_code == 200:
+            return True, "连接成功"
+        else:
+            return False, "服务器错误"
+    except requests.exceptions.ConnectionError:
+        return False, "无法连接到服务器"
+    except requests.exceptions.Timeout:
+        return False, "连接超时"
+    except Exception as e:
+        return False, f"连接失败: {str(e)}"
+
+
+def register_cloud_user(username, email, password):
+    """注册云端用户"""
+    try:
+        response = requests.post(
+            f"{CLOUD_SYNC_SERVER}/api/auth/register",
+            json={
+                "username": username,
+                "email": email,
+                "password": password
+            },
+            timeout=5
+        )
+
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {"success": False, "message": f"注册失败: {response.status_code}"}
+
+    except Exception as e:
+        return {"success": False, "message": f"网络错误: {str(e)}"}
+
+
+def login_cloud_user(username, password):
+    """登录云端用户"""
+    try:
+        response = requests.post(
+            f"{CLOUD_SYNC_SERVER}/api/auth/login",
+            json={
+                "username": username,
+                "password": password
+            },
+            timeout=5
+        )
+
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {"success": False, "message": f"登录失败: {response.status_code}"}
+
+    except Exception as e:
+        return {"success": False, "message": f"网络错误: {str(e)}"}
 
 
 # ==================== 智能推荐引擎 ====================
@@ -1803,6 +1954,18 @@ def init_session_state():
     # 加载阅读历史（用于日历视图）
     if "reading_history_cache" not in st.session_state:
         st.session_state.reading_history_cache = {}
+
+    # 云端同步状态
+    if "cloud_sync_enabled" not in st.session_state:
+        st.session_state.cloud_sync_enabled = False
+    if "cloud_sync_token" not in st.session_state:
+        st.session_state.cloud_sync_token = None
+    if "cloud_sync_username" not in st.session_state:
+        st.session_state.cloud_sync_username = None
+    if "last_cloud_sync" not in st.session_state:
+        st.session_state.last_cloud_sync = None
+    if "auto_sync_interval" not in st.session_state:
+        st.session_state.auto_sync_interval = 300  # 5分钟自动同步
 
 
 # ==================== 用户管理相关函数 ====================
@@ -5236,75 +5399,195 @@ def render_sidebar():
 
         # ========== 云端同步功能 ==========
         st.markdown('<div style="margin: 1.5rem 0 0.75rem 0;">', unsafe_allow_html=True)
-        st.markdown('<div style="font-size: 0.75rem; font-weight: 600; color: #636E72; margin-bottom: 0.75rem;">☁️ 数据同步</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size: 0.75rem; font-weight: 600; color: #636E72; margin-bottom: 0.75rem;">☁️ 云端同步</div>', unsafe_allow_html=True)
 
-        with st.expander("💾 备份与同步", expanded=False):
-            st.markdown('<div style="font-size: 0.75rem; color: #636E72; margin-bottom: 0.5rem;">导出数据</div>', unsafe_allow_html=True)
-
-            # 导出按钮
-            if st.button("📤 导出所有数据", key="export_data", use_container_width=True):
-                data = export_all_data()
-                if data:
-                    # 提供下载
-                    import json
-                    json_str = json.dumps(data, ensure_ascii=False, indent=2)
-                    st.download_button(
-                        label="💾 下载备份文件",
-                        data=json_str,
-                        file_name=f"deepread_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                        mime="application/json",
-                        use_container_width=True
-                    )
-                    st.success("✅ 数据已准备好下载！")
+        with st.expander("🌐 云端自动同步", expanded=False):
+            # 显示同步状态
+            if st.session_state.cloud_sync_enabled and st.session_state.cloud_sync_username:
+                sync_status_color = "#27ae60"  # 绿色
+                sync_status_text = "已启用"
+                last_sync = st.session_state.get("last_cloud_sync")
+                if last_sync:
+                    last_sync_time = datetime.fromisoformat(last_sync)
+                    time_ago = (datetime.now() - last_sync_time).seconds // 60
+                    sync_info = f"上次同步: {time_ago}分钟前"
                 else:
-                    st.error("❌ 导出失败")
+                    sync_info = "尚未同步"
+            else:
+                sync_status_color = "#95a5a6"  # 灰色
+                sync_status_text = "未启用"
+                sync_info = "登录以启用自动同步"
 
-            st.markdown('<div style="margin-top: 1rem; font-size: 0.75rem; color: #636E72; margin-bottom: 0.5rem;">导入数据</div>', unsafe_allow_html=True)
+            st.markdown(f"""
+<div style="background: {sync_status_color}; padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem;">
+    <div style="font-size: 0.8rem; color: white; font-weight: 600;">{sync_status_text}</div>
+    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.9);">{sync_info}</div>
+</div>
+""", unsafe_allow_html=True)
 
-            # 导入功能
-            uploaded_file = st.file_uploader(
-                "选择备份文件",
-                type=['json'],
-                key="import_backup",
-                label_visibility="collapsed"
-            )
+            # 登录/注册表单
+            if not st.session_state.cloud_sync_username:
+                st.markdown('<div style="font-size: 0.75rem; color: #636E72; margin-bottom: 0.5rem;">账号登录</div>', unsafe_allow_html=True)
 
-            if uploaded_file is not None:
-                try:
-                    import json
-                    data_dict = json.loads(uploaded_file.read().decode('utf-8'))
+                auth_tab1, auth_tab2 = st.tabs(["登录", "注册"])
 
-                    # 选择合并策略
-                    merge_strategy = st.radio(
-                        "合并策略",
-                        ["merge", "replace", "skip"],
-                        format_func=lambda x: {
-                            "merge": "🔄 智能合并（推荐）",
-                            "replace": "🔃 完全覆盖",
-                            "skip": "⏭️ 保留本地"
-                        }[x],
-                        horizontal=True
-                    )
+                with auth_tab1:
+                    login_username = st.text_input("用户名", key="login_username", label_visibility="visible")
+                    login_password = st.text_input("密码", type="password", key="login_password", label_visibility="visible")
 
-                    col_import, col_cancel = st.columns(2)
-                    with col_import:
-                        if st.button("✅ 确认导入", key="confirm_import", use_container_width=True):
-                            if import_data(data_dict, merge_strategy):
-                                st.success("✅ 数据导入成功！")
+                    if st.button("🔑 登录", key="cloud_login_btn", use_container_width=True):
+                        if login_username and login_password:
+                            result = login_cloud_user(login_username, login_password)
+                            if result.get("success"):
+                                st.session_state.cloud_sync_enabled = True
+                                st.session_state.cloud_sync_token = result.get("token")
+                                st.session_state.cloud_sync_username = login_username
+                                st.success("✅ 登录成功！自动同步已启用")
+                                time.sleep(1)
                                 st.rerun()
                             else:
-                                st.error("❌ 导入失败")
+                                st.error(f"❌ {result.get('message', '登录失败')}")
+                        else:
+                            st.warning("⚠️ 请输入用户名和密码")
 
-                    with col_cancel:
-                        if st.button("❌ 取消", key="cancel_import", use_container_width=True):
-                            st.rerun()
+                with auth_tab2:
+                    reg_username = st.text_input("用户名", key="reg_username", label_visibility="visible")
+                    reg_email = st.text_input("邮箱", key="reg_email", label_visibility="visible")
+                    reg_password = st.text_input("密码", type="password", key="reg_password", label_visibility="visible")
 
-                except Exception as e:
-                    st.error(f"❌ 文件解析失败: {e}")
+                    if st.button("📝 注册", key="cloud_register_btn", use_container_width=True):
+                        if reg_username and reg_email and reg_password:
+                            result = register_cloud_user(reg_username, reg_email, reg_password)
+                            if result.get("success"):
+                                st.success("✅ 注册成功！请登录")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error(f"❌ {result.get('message', '注册失败')}")
+                        else:
+                            st.warning("⚠️ 请填写完整信息")
 
-            st.markdown('<div style="margin-top: 0.75rem; padding: 0.5rem; background: #FFF3CD; border-radius: 6px; font-size: 0.7rem; color: #856404;">', unsafe_allow_html=True)
-            st.markdown('💡 **提示**：定期导出数据可以防止数据丢失。导入时会自动合并冲突数据。', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                # 已登录状态
+                st.markdown(f'<div style="font-size: 0.8rem; color: #2D3436; margin-bottom: 0.5rem;">👤 {st.session_state.cloud_sync_username}</div>', unsafe_allow_html=True)
+
+                # 手动同步按钮
+                col_push, col_pull, col_test = st.columns(3)
+
+                with col_push:
+                    if st.button("📤 上传", key="manual_push", use_container_width=True):
+                        with st.spinner("正在上传..."):
+                            if auto_sync_to_cloud():
+                                st.success("✅ 上传成功")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("❌ 上传失败")
+
+                with col_pull:
+                    if st.button("📥 下载", key="manual_pull", use_container_width=True):
+                        with st.spinner("正在下载..."):
+                            if auto_sync_from_cloud():
+                                st.success("✅ 下载成功")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("❌ 下载失败")
+
+                with col_test:
+                    if st.button("🔗 测试", key="test_connection", use_container_width=True):
+                        with st.spinner("测试连接..."):
+                            success, msg = test_cloud_connection()
+                            if success:
+                                st.success(f"✅ {msg}")
+                            else:
+                                st.error(f"❌ {msg}")
+
+                # 自动同步开关
+                auto_sync = st.checkbox("🔄 自动同步（每5分钟）", value=st.session_state.cloud_sync_enabled, key="auto_sync_toggle")
+                st.session_state.cloud_sync_enabled = auto_sync
+
+                # 登出按钮
+                if st.button("🚪 登出", key="cloud_logout", use_container_width=True):
+                    st.session_state.cloud_sync_enabled = False
+                    st.session_state.cloud_sync_token = None
+                    st.session_state.cloud_sync_username = None
+                    st.info("已登出云端同步")
+                    time.sleep(0.5)
+                    st.rerun()
+
+            # 分隔线
+            st.markdown('<div style="margin: 1rem 0; border-top: 1px solid #E8EEF2;"></div>', unsafe_allow_html=True)
+
+            # 本地备份导出
+            with st.expander("💾 本地备份（导出/导入）", expanded=False):
+                st.markdown('<div style="font-size: 0.75rem; color: #636E72; margin-bottom: 0.5rem;">导出数据</div>', unsafe_allow_html=True)
+
+                # 导出按钮
+                if st.button("📤 导出所有数据", key="export_data", use_container_width=True):
+                    data = export_all_data()
+                    if data:
+                        # 提供下载
+                        import json
+                        json_str = json.dumps(data, ensure_ascii=False, indent=2)
+                        st.download_button(
+                            label="💾 下载备份文件",
+                            data=json_str,
+                            file_name=f"deepread_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                            mime="application/json",
+                            use_container_width=True
+                        )
+                        st.success("✅ 数据已准备好下载！")
+                    else:
+                        st.error("❌ 导出失败")
+
+                st.markdown('<div style="margin-top: 1rem; font-size: 0.75rem; color: #636E72; margin-bottom: 0.5rem;">导入数据</div>', unsafe_allow_html=True)
+
+                # 导入功能
+                uploaded_file = st.file_uploader(
+                    "选择备份文件",
+                    type=['json'],
+                    key="import_backup",
+                    label_visibility="collapsed"
+                )
+
+                if uploaded_file is not None:
+                    try:
+                        import json
+                        data_dict = json.loads(uploaded_file.read().decode('utf-8'))
+
+                        # 选择合并策略
+                        merge_strategy = st.radio(
+                            "合并策略",
+                            ["merge", "replace", "skip"],
+                            format_func=lambda x: {
+                                "merge": "🔄 智能合并（推荐）",
+                                "replace": "🔃 完全覆盖",
+                                "skip": "⏭️ 保留本地"
+                            }[x],
+                            horizontal=True
+                        )
+
+                        col_import, col_cancel = st.columns(2)
+                        with col_import:
+                            if st.button("✅ 确认导入", key="confirm_import", use_container_width=True):
+                                if import_data(data_dict, merge_strategy):
+                                    st.success("✅ 数据导入成功！")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ 导入失败")
+
+                        with col_cancel:
+                            if st.button("❌ 取消", key="cancel_import", use_container_width=True):
+                                st.rerun()
+
+                    except Exception as e:
+                        st.error(f"❌ 文件解析失败: {e}")
+
+                st.markdown('<div style="margin-top: 0.75rem; padding: 0.5rem; background: #FFF3CD; border-radius: 6px; font-size: 0.7rem; color: #856404;">', unsafe_allow_html=True)
+                st.markdown('💡 **提示**：云端同步需要先启动服务器。本地备份可用于数据迁移。', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+
         # ==========================================
 
         # 底部信息 - 放大文字
@@ -5335,6 +5618,22 @@ def main():
 
     # 显示复习提醒面板
     show_review_reminder_panel()
+
+    # 自动云端同步（如果启用）
+    if st.session_state.cloud_sync_enabled:
+        # 检查是否需要同步（基于时间间隔）
+        last_sync = st.session_state.get("last_cloud_sync")
+        if last_sync:
+            last_sync_time = datetime.fromisoformat(last_sync)
+            seconds_since_sync = (datetime.now() - last_sync_time).seconds
+        else:
+            seconds_since_sync = st.session_state.auto_sync_interval + 1  # 首次运行时立即同步
+
+        if seconds_since_sync >= st.session_state.auto_sync_interval:
+            # 先推送到云端
+            auto_sync_to_cloud()
+            # 再从云端拉取（合并最新数据）
+            auto_sync_from_cloud()
 
     # 显示新手引导气泡
     show_guide_bubble()
